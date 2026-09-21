@@ -33,6 +33,11 @@ jobs:
       - name: Set up Android SDK tools
         uses: android-actions/setup-android@v4
 
+      - name: Install Android build tools
+        run: |
+          sdkmanager "platform-tools" "build-tools;35.0.0"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+   
       - name: Locate and prepare APK
         shell: bash
         run: |
