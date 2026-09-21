@@ -411,6 +411,14 @@ class MainActivity : Activity() {
         backupStatusView=TextView(this); updateBackupStatusView()
     }
 
+    private fun showProfile() {
+        AlertDialog.Builder(this)
+            .setTitle("App Developer")
+            .setMessage("Biswajit Das")
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
     private fun settingCard(icon:String,title:String,subtitle:String): LinearLayout=LinearLayout(this).apply{
         orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(8),dp(10),dp(8));background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235));elevation=dp(1).toFloat()
         addView(TextView(this@MainActivity).apply{text=icon;textSize=27f;gravity=Gravity.CENTER;setTextColor(Color.rgb(25,38,50))},LinearLayout.LayoutParams(dp(54),-1))
@@ -450,7 +458,7 @@ class MainActivity : Activity() {
         if(!::container.isInitialized)return
         container.removeViews(1, maxOf(0,container.childCount-1))
         rows.forEachIndexed { index,r ->
-            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(2),0,dp(2),0);background=if(index%2==0)Color.WHITE else Color.rgb(250,251,252)}
+            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(2),0,dp(2),0);setBackgroundColor(if(index%2==0)Color.WHITE else Color.rgb(250,251,252))}
             row.addView(TextView(this).apply{text="${index+1}";textSize=13f;gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(48),0.65f))
             val item=EditText(this).apply{setText(r.item);hint="Enter item";textSize=13f;setSingleLine(true);setBackgroundColor(Color.TRANSPARENT);setPadding(dp(6),0,dp(4),0);inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;setOnFocusChangeListener{_,focus->if(!focus){r.item=text.toString();saveCurrent()}}}
             row.addView(item,LinearLayout.LayoutParams(0,dp(48),2.85f))
