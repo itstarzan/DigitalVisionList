@@ -31,7 +31,7 @@ jobs:
         run: gradle -Pandroid.useAndroidX=true -Pandroid.nonTransitiveRClass=true :app:assembleRelease --no-daemon
 
       - name: Set up Android SDK tools
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Locate and prepare APK
         shell: bash
