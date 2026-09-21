@@ -18,6 +18,8 @@ import android.widget.*
 import java.text.SimpleDateFormat
 import java.util.*
 import java.io.File
+import java.net.URL
+import java.net.HttpURLConnection
 import androidx.core.content.FileProvider
 
 data class Row(var item:String, var qty:Int)
@@ -137,7 +139,7 @@ class MainActivity : Activity() {
         orderTo = EditText(this).apply {
             hint = "Order To"
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             setPadding(12, 0, 12, 0)
         }
         content.addView(orderTo, lp(-1,52))
@@ -155,7 +157,7 @@ class MainActivity : Activity() {
         content.addView(header, lp(-1,48))
 
         container = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
-        content.addView(container, lp(-1, WRAP_CONTENT))
+        content.addView(container, lp(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         total = TextView(this).apply { textSize=18f; setTypeface(null,Typeface.BOLD); gravity=Gravity.CENTER_VERTICAL }
         content.addView(total, lp(-1,52))
@@ -204,7 +206,7 @@ class MainActivity : Activity() {
 
         val search = EditText(this).apply {
             hint = "Search saved files..."
-            singleLine = true
+            setSingleLine(true)
             setPadding(16,0,16,0)
         }
         root.addView(search, lp(-1,52))
@@ -344,7 +346,7 @@ class MainActivity : Activity() {
             textSize = 14f
             setPadding(12, 8, 12, 12)
         }
-        root.addView(backupStatusView, lp(-1,WRAP_CONTENT))
+        root.addView(backupStatusView, lp(-1,ViewGroup.LayoutParams.WRAP_CONTENT))
         updateBackupStatusView()
 
         val updateButton = button("App Update")
@@ -406,7 +408,7 @@ class MainActivity : Activity() {
                 setText(r.item)
                 hint = "Enter item"
                 textSize = 15f
-                singleLine = true
+                setSingleLine(true)
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or
                     android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 setPadding(8, 0, 8, 0)
@@ -424,7 +426,7 @@ class MainActivity : Activity() {
                 hint = "0"
                 textSize = 15f
                 gravity = Gravity.CENTER
-                singleLine = true
+                setSingleLine(true)
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER
                 setPadding(4, 0, 4, 0)
                 setOnFocusChangeListener { _, hasFocus ->
@@ -628,7 +630,7 @@ class MainActivity : Activity() {
 
         val search = EditText(this).apply {
             hint = "Search saved lists"
-            singleLine = true
+            setSingleLine(true)
             setPadding(20, 10, 20, 10)
         }
         val list = ListView(this)
@@ -1071,7 +1073,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(20, 5, 20, 5)
             addView(progress, LinearLayout.LayoutParams(55, 55))
-            addView(message, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(message, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
 
         backupProgressDialog = AlertDialog.Builder(this)
@@ -1192,7 +1194,7 @@ class MainActivity : Activity() {
     }
     private fun button(s:String)=Button(this).apply{text=s; textSize=12f}
 
-    private fun lp(w:Int,h:Int)=LinearLayout.LayoutParams(w,h)
+    private fun lp(w:Int,h:Int,weight:Float=0f)=LinearLayout.LayoutParams(w,h).apply { this.weight=weight }
 
     private fun exportJpg(){
         // Sync current editor values

@@ -11,6 +11,10 @@ android {
         applicationId = "com.digitalvision.listapp"
         minSdk = 24
         targetSdk = 36
+
+    buildFeatures {
+        buildConfig = true
+    }
         versionCode = 8
         versionName = "1.7"
     }
