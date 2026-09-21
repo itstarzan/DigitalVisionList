@@ -17,6 +17,7 @@ import org.json.JSONObject
 import android.widget.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 import java.io.File
 import java.net.URL
 import java.net.HttpURLConnection
@@ -62,54 +63,122 @@ class MainActivity : Activity() {
     private lateinit var bottomSaved: TextView
     private lateinit var bottomSettings: TextView
 
+    private var summaryItems: TextView? = null
+    private var summaryQty: TextView? = null
+    private var lastExportUri: Uri? = null
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
+
+    private fun roundedBg(fill: Int, radius: Float = 16f, stroke: Int? = null): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radius.toInt()).toFloat()
+            if (stroke != null) setStroke(dp(1), stroke)
+        }
+
     private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(247, 248, 250))
         }
         mainContent = FrameLayout(this)
         root.addView(mainContent, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(10), dp(7), dp(10), dp(7))
             setBackgroundColor(Color.WHITE)
-            setPadding(8, 6, 8, 8)
-            elevation = 10f
+            elevation = dp(8).toFloat()
         }
         bottomHome = navItem("⌂", "Home")
-        bottomSaved = navItem("▣", "Saved Files")
+        bottomSaved = navItem("■", "Saved Files")
         bottomSettings = navItem("⚙", "Settings")
-        nav.addView(bottomHome, LinearLayout.LayoutParams(0, 68, 1f))
-        nav.addView(bottomSaved, LinearLayout.LayoutParams(0, 68, 1f))
-        nav.addView(bottomSettings, LinearLayout.LayoutParams(0, 68, 1f))
+        nav.addView(bottomHome, LinearLayout.LayoutParams(0, dp(66), 1f))
+        nav.addView(bottomSaved, LinearLayout.LayoutParams(0, dp(66), 1f))
+        nav.addView(bottomSettings, LinearLayout.LayoutParams(0, dp(66), 1f))
         root.addView(nav)
-
         setContentView(root)
         showHome()
     }
 
-    private fun navItem(icon: String, label: String): TextView {
-        return TextView(this).apply {
-            text = "$icon\n$label"
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(Color.DKGRAY)
-            setOnClickListener {
-                when (label) {
-                    "Home" -> showHome()
-                    "Saved Files" -> showSavedFiles()
-                    "Settings" -> showSettings()
-                }
+    private fun navItem(icon: String, label: String): TextView = TextView(this).apply {
+        text = "$icon\n$label"
+        textSize = 12f
+        gravity = Gravity.CENTER
+        typeface = Typeface.create("sans", Typeface.NORMAL)
+        setTextColor(Color.rgb(28, 38, 48))
+        setPadding(0, dp(2), 0, 0)
+        setOnClickListener {
+            when (label) {
+                "Home" -> showHome()
+                "Saved Files" -> showSavedFiles()
+                "Settings" -> showSettings()
             }
         }
     }
 
     private fun refreshBottomNav() {
-        val active = Color.rgb(190, 25, 25)
-        val inactive = Color.DKGRAY
-        bottomHome.setTextColor(if (selectedTab == 0) active else inactive)
-        bottomSaved.setTextColor(if (selectedTab == 1) active else inactive)
-        bottomSettings.setTextColor(if (selectedTab == 2) active else inactive)
+        val active = Color.rgb(230, 35, 43)
+        val inactive = Color.rgb(31, 43, 55)
+        listOf(bottomHome, bottomSaved, bottomSettings).forEachIndexed { i, v ->
+            v.setTextColor(if (selectedTab == i) active else inactive)
+            v.background = if (selectedTab == i) roundedBg(Color.rgb(255, 232, 234), 14f) else null
+        }
+    }
+
+    private fun appHeader(parent: LinearLayout) {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(5), dp(4), dp(7))
+        }
+        val menu = TextView(this).apply {
+            text = "☰"
+            textSize = 27f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(20, 29, 38))
+        }
+        header.addView(menu, LinearLayout.LayoutParams(dp(42), dp(54)))
+
+        val logo = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val brand = TextView(this).apply {
+            text = "DIGITAL "
+            textSize = 22f
+            typeface = Typeface.create("sans", Typeface.BOLD)
+            setTextColor(Color.rgb(16, 24, 31))
+            gravity = Gravity.CENTER
+        }
+        val brandLine = LinearLayout(this)
+        brandLine.gravity = Gravity.CENTER
+        brandLine.addView(brand, LinearLayout.LayoutParams(-2, -2))
+        val vision = TextView(this).apply {
+            text = "VISION"
+            textSize = 22f
+            typeface = Typeface.create("sans", Typeface.BOLD)
+            setTextColor(Color.rgb(225, 31, 38))
+        }
+        brandLine.addView(vision)
+        logo.addView(brandLine)
+        logo.addView(TextView(this).apply {
+            text = "Mobile Repair Shop"
+            textSize = 11f
+            setTextColor(Color.rgb(80, 88, 96))
+            gravity = Gravity.CENTER
+        })
+        header.addView(logo, LinearLayout.LayoutParams(0, dp(54), 1f))
+
+        val slogan = TextView(this).apply {
+            text = "Repair\nConnect\nGrow"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("cursive", Typeface.ITALIC)
+            setTextColor(Color.rgb(35, 35, 35))
+        }
+        header.addView(slogan, LinearLayout.LayoutParams(dp(62), dp(54)))
+        parent.addView(header, lp(-1, dp(68)))
     }
 
     private fun showHome() {
@@ -117,69 +186,117 @@ class MainActivity : Activity() {
         refreshBottomNav()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 18, 24, 18)
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(247, 248, 250))
         }
         val scroll = ScrollView(this)
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(content)
-
-        val title = TextView(this).apply {
-            text = "DIGITAL VISION LIST"
-            textSize = 23f
-            setTextColor(Color.rgb(180,25,25))
-            gravity = Gravity.CENTER
-            setTypeface(null, Typeface.BOLD)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(8), dp(14), dp(18))
         }
-        content.addView(title, lp(-1,55))
+        scroll.addView(content)
+        appHeader(content)
 
-        shop = EditText(this).apply { setText("Digital Vision"); hint="Shop name"; textSize=17f }
-        content.addView(shop, lp(-1,55))
+        // Keep the shop name internally for exports/backups without displaying an extra field.
+        shop = EditText(this).apply { setText("Digital Vision") }
+
+        val currentCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = roundedBg(Color.WHITE, 17f, Color.rgb(230, 232, 235))
+            elevation = dp(1).toFloat()
+        }
+        val currentTop = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        currentTop.addView(TextView(this).apply {
+            text = "☷  Current List"
+            textSize = 19f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(22, 30, 38))
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        val summary = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        summaryItems = TextView(this).apply { textSize = 13f; setTextColor(Color.DKGRAY); gravity = Gravity.RIGHT }
+        summaryQty = TextView(this).apply { textSize = 13f; setTextColor(Color.rgb(220, 31, 38)); gravity = Gravity.RIGHT; typeface = Typeface.DEFAULT_BOLD }
+        summary.addView(summaryItems)
+        summary.addView(summaryQty)
+        currentTop.addView(summary, LinearLayout.LayoutParams(dp(95), dp(48)))
+        currentCard.addView(currentTop)
+
+        val table = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = roundedBg(Color.rgb(244, 246, 248), 10f)
+        }
+        header.addView(tableCell("SL", 0.65f, true))
+        header.addView(tableCell("Item Name", 2.85f, true))
+        header.addView(tableCell("Qty", 0.95f, true))
+        header.addView(tableCell("", 0.55f, true))
+        table.addView(header, lp(-1, dp(42)))
+        container = table
+        currentCard.addView(table)
+        content.addView(currentCard, lp(-1, -2))
 
         orderTo = EditText(this).apply {
             hint = "Order To"
-            textSize = 16f
+            textSize = 14f
             setSingleLine(true)
-            setPadding(12, 0, 12, 0)
+            setPadding(dp(12), 0, dp(42), 0)
+            background = roundedBg(Color.WHITE, 12f, Color.rgb(225, 228, 232))
         }
-        content.addView(orderTo, lp(-1,52))
+        val orderBox = FrameLayout(this)
+        orderBox.addView(orderTo, FrameLayout.LayoutParams(-1, dp(52)))
+        orderBox.addView(TextView(this).apply {
+            text = "✎"
+            textSize = 21f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(25, 35, 45))
+        }, FrameLayout.LayoutParams(dp(42), dp(52), Gravity.END))
+        content.addView(orderBox, lp(-1, dp(64)))
 
         date = TextView(this).apply {
-            text = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
-            textSize=15f
-            setTextColor(Color.DKGRAY)
-            gravity=Gravity.CENTER_VERTICAL
+            text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+            textSize = 15f
+            setTextColor(Color.rgb(25, 35, 45))
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, 0, 0)
         }
-        content.addView(date, lp(-1,40))
+        content.addView(date, lp(-1, dp(30)))
 
-        val header = LinearLayout(this)
-        listHeader(header, "S.No.", 0.18f); listHeader(header,"Item",0.52f); listHeader(header,"Qty",0.30f)
-        content.addView(header, lp(-1,48))
+        val addItem = actionCard("⊕", "Add New Item", "Add another row")
+        addItem.setOnClickListener { addRow() }
+        content.addView(addItem, lp(-1, dp(58)))
 
-        container = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
-        content.addView(container, lp(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val actionGrid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun gridRow(a: View, b: View) {
+            val r = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
+            r.addView(a, LinearLayout.LayoutParams(0, dp(84), 1f).apply { setMargins(0, dp(5), dp(4), 0) })
+            r.addView(b, LinearLayout.LayoutParams(0, dp(84), 1f).apply { setMargins(dp(4), dp(5), 0, 0) })
+            actionGrid.addView(r)
+        }
+        val save = actionCard("▣", "Save List", "Auto save to history").apply { setOnClickListener { addHistorySnapshot(); Toast.makeText(this@MainActivity, "List saved to history.", Toast.LENGTH_SHORT).show() } }
+        val export = actionCard("↗", "Export as JPG", "Save to Gallery").apply { setOnClickListener { exportJpg() } }
+        val print = actionCard("▣", "Print", "Share / Print").apply { setOnClickListener { shareOrPrint() } }
+        val share = actionCard("●", "Share", "Send via WhatsApp").apply { setOnClickListener { shareOrPrint(true) } }
+        gridRow(save, export); gridRow(print, share)
+        content.addView(actionGrid, lp(-1, dp(178)))
 
-        total = TextView(this).apply { textSize=18f; setTypeface(null,Typeface.BOLD); gravity=Gravity.CENTER_VERTICAL }
-        content.addView(total, lp(-1,52))
+        val newList = TextView(this).apply {
+            text = "＋  New List"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = roundedBg(Color.rgb(225, 31, 38), 13f)
+            setOnClickListener { startNewList() }
+        }
+        content.addView(newList, lp(-1, dp(50)))
 
-        val buttons = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
-        val add=button("+ Add Item"); add.setOnClickListener{addRow()}
-        val clear=button("Clear"); clear.setOnClickListener{rows.clear(); addRow()}
-        val export=button("Export JPG"); export.setOnClickListener{exportJpg()}
-        buttons.addView(add, LinearLayout.LayoutParams(0,52,1f))
-        buttons.addView(clear, LinearLayout.LayoutParams(0,52,1f))
-        buttons.addView(export, LinearLayout.LayoutParams(0,52,1f))
-        content.addView(buttons)
-
-        val newList = button("New List")
-        newList.setOnClickListener { startNewList() }
-        content.addView(newList, lp(-1,52))
-
-        root.addView(scroll, LinearLayout.LayoutParams(-1,0,1f))
-        mainContent.removeAllViews()
-        mainContent.addView(root, FrameLayout.LayoutParams(-1,-1))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        mainContent.removeAllViews(); mainContent.addView(root, FrameLayout.LayoutParams(-1, -1))
         loadSaved()
-        if (rows.isEmpty()) rows.add(Row("",1))
+        if (rows.isEmpty()) rows.add(Row("", 1))
         render()
     }
 
@@ -188,293 +305,162 @@ class MainActivity : Activity() {
         refreshBottomNav()
         loadHistory()
         savedSortNewestFirst = prefs.getBoolean("saved_sort_newest_first", true)
-
         val frame = FrameLayout(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24,18,24,18)
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(247, 248, 250))
+            setPadding(dp(14), dp(8), dp(14), 0)
         }
+        appHeader(root)
         val title = TextView(this).apply {
             text = "Saved Files"
-            textSize = 24f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(180,25,25))
-            gravity = Gravity.CENTER
+            textSize = 21f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(20,28,36)); gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(6),0,0,0)
         }
-        root.addView(title, lp(-1,55))
-
+        root.addView(title, lp(-1, dp(42)))
         val search = EditText(this).apply {
-            hint = "Search saved files..."
-            setSingleLine(true)
-            setPadding(16,0,16,0)
+            hint = "⌕  Search saved lists..."; textSize = 14f; setSingleLine(true); setPadding(dp(14),0,dp(14),0)
+            background = roundedBg(Color.WHITE, 14f, Color.rgb(228,230,234))
         }
-        root.addView(search, lp(-1,52))
-
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(search, lp(-1, dp(48)))
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0,dp(8),0,dp(5)) }
+        val all = pill("All Lists (${history.size})", true); val fav = pill("Favorites (0)", false); val recent = pill("Recent", false)
+        tabs.addView(all, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(0,0,dp(4),0) })
+        tabs.addView(fav, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(2),0,dp(2),0) })
+        tabs.addView(recent, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(4),0,0,0) })
+        root.addView(tabs)
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0,dp(4),0,dp(86)) }
         val scroll = ScrollView(this).apply { addView(list) }
         root.addView(scroll, LinearLayout.LayoutParams(-1,0,1f))
         frame.addView(root, FrameLayout.LayoutParams(-1,-1))
-
         val sortButton = TextView(this).apply {
-            text = "⇅"
-            textSize = 27f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.rgb(190,25,25))
-            }
-            elevation = 8f
+            text = "⇅"; textSize = 25f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); background = roundedBg(Color.rgb(225,31,38), 30f); elevation = dp(6).toFloat()
             setOnClickListener { showSortDialog { rebuildSavedFiles(list, search.text.toString()) } }
         }
-        val fabLp = FrameLayout.LayoutParams(62,62,Gravity.END or Gravity.BOTTOM).apply { setMargins(0,0,22,22) }
-        frame.addView(sortButton, fabLp)
-
-        search.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                rebuildSavedFiles(list, s?.toString().orEmpty())
-            }
-            override fun afterTextChanged(s: android.text.Editable?) {}
+        frame.addView(sortButton, FrameLayout.LayoutParams(dp(58),dp(58),Gravity.END or Gravity.BOTTOM).apply { setMargins(0,0,dp(18),dp(18)) })
+        search.addTextChangedListener(object: android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start:Int,count:Int,after:Int){}
+            override fun onTextChanged(s: CharSequence?, start:Int,before:Int,count:Int){ rebuildSavedFiles(list,s?.toString().orEmpty()) }
+            override fun afterTextChanged(s: android.text.Editable?){}
         })
-
-        mainContent.removeAllViews()
-        mainContent.addView(frame, FrameLayout.LayoutParams(-1,-1))
+        mainContent.removeAllViews(); mainContent.addView(frame, FrameLayout.LayoutParams(-1,-1))
         rebuildSavedFiles(list, "")
     }
 
-    private fun rebuildSavedFiles(list: LinearLayout, query: String) {
-        loadHistory()
-        list.removeAllViews()
-        val indexed = history.mapIndexed { index, raw -> index to raw }
-        val ordered = if (savedSortNewestFirst) indexed else indexed.reversed()
-        var shown = 0
-        for ((index, raw) in ordered) {
-            try {
-                val o = JSONObject(raw)
-                val name = o.optString("historyName", o.optString("date", "Saved List"))
-                val shopName = o.optString("shop", "Digital Vision")
-                val order = o.optString("orderTo", "")
-                val count = o.optJSONArray("rows")?.length() ?: 0
-                val label = "$name $shopName $order"
-                if (query.isNotBlank() && !label.contains(query, true)) continue
+    private fun pill(text: String, active: Boolean): TextView = TextView(this).apply {
+        this.text=text; textSize=12f; gravity=Gravity.CENTER; typeface=Typeface.DEFAULT_BOLD
+        setTextColor(if(active) Color.rgb(225,31,38) else Color.rgb(55,65,75))
+        background=roundedBg(if(active) Color.rgb(255,232,234) else Color.WHITE, 12f, Color.rgb(225,228,232))
+    }
 
-                val card = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(14,10,8,10)
-                    background = GradientDrawable().apply {
-                        setColor(Color.rgb(248,248,248))
-                        cornerRadius = 18f
-                        setStroke(1, Color.rgb(225,225,225))
-                    }
-                    setOnClickListener { showHistoryActions(index) }
+    private fun rebuildSavedFiles(list: LinearLayout, query: String) {
+        loadHistory(); list.removeAllViews()
+        val indexed = history.mapIndexed { index, raw -> index to raw }
+        val ordered = if(savedSortNewestFirst) indexed else indexed.reversed()
+        var shown=0
+        for((index,raw) in ordered){
+            try{
+                val o=JSONObject(raw); val name=o.optString("historyName",o.optString("date","Saved List")); val count=o.optJSONArray("rows")?.length()?:0
+                val order=o.optString("orderTo",""); val label="$name $order $count"
+                if(query.isNotBlank() && !label.contains(query,true)) continue
+                val card=LinearLayout(this).apply{
+                    orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(10),dp(8),dp(8),dp(8)); background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235)); elevation=dp(1).toFloat()
+                    setOnClickListener{showHistoryActions(index)}
                 }
-                val info = TextView(this).apply {
-                    text = "$name\n$count items${if (order.isNotBlank()) "  •  $order" else ""}"
-                    textSize = 16f
-                    setTextColor(Color.DKGRAY)
-                    setPadding(8,0,8,0)
-                }
-                card.addView(info, LinearLayout.LayoutParams(0,72,1f))
-                val menu = Button(this).apply {
-                    text = "⋮"
-                    textSize = 22f
-                    setOnClickListener { showHistoryActions(index) }
-                }
-                card.addView(menu, LinearLayout.LayoutParams(54,58))
-                list.addView(card, LinearLayout.LayoutParams(-1,82).apply { setMargins(0,0,0,10) })
+                val icon=TextView(this).apply{text="▤";textSize=28f;gravity=Gravity.CENTER;setTextColor(Color.rgb(23,34,45))}
+                card.addView(icon,LinearLayout.LayoutParams(dp(48),dp(70)))
+                val info=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
+                info.addView(TextView(this).apply{text="List ${history.size-index}";textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(22,30,38))})
+                info.addView(TextView(this).apply{text="${name}  •  $count items${if(order.isNotBlank()) "  •  $order" else ""}";textSize=11f;setTextColor(Color.rgb(90,98,106))})
+                card.addView(info,LinearLayout.LayoutParams(0,dp(70),1f))
+                val star=TextView(this).apply{text="☆";textSize=25f;gravity=Gravity.CENTER;setTextColor(Color.rgb(225,31,38))}
+                val open=TextView(this).apply{text="↗";textSize=24f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{restoreHistory(index)}}
+                val share=TextView(this).apply{text="●";textSize=18f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{restoreHistory(index);showHome();exportJpg()}}
+                val menu=TextView(this).apply{text="⋮";textSize=25f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{showHistoryActions(index)}}
+                list.addView(card,LinearLayout.LayoutParams(-1,dp(82)).apply{setMargins(0,0,0,dp(8))})
+                card.addView(star,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(open,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(share,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(menu,LinearLayout.LayoutParams(dp(32),dp(70)))
                 shown++
-            } catch (_: Exception) {}
+            }catch(_:Exception){}
         }
-        if (shown == 0) {
-            list.addView(TextView(this).apply {
-                text = if (history.isEmpty()) "No saved files yet." else "No saved files match your search."
-                textSize = 16f
-                gravity = Gravity.CENTER
-                setTextColor(Color.GRAY)
-                setPadding(10,40,10,40)
-            }, lp(-1,120))
-        }
+        if(shown==0) list.addView(TextView(this).apply{text=if(history.isEmpty())"No saved files yet." else "No saved files match your search.";textSize=16f;gravity=Gravity.CENTER;setTextColor(Color.GRAY);setPadding(0,dp(50),0,dp(50))},lp(-1,dp(120)))
     }
 
     private fun showSortDialog(onSorted: () -> Unit) {
-        val options = arrayOf("New to old", "Old to new")
-        val checked = if (savedSortNewestFirst) 0 else 1
-        AlertDialog.Builder(this)
-            .setTitle("Sort saved files")
-            .setSingleChoiceItems(options, checked) { dialog, which ->
-                savedSortNewestFirst = which == 0
-                prefs.edit().putBoolean("saved_sort_newest_first", savedSortNewestFirst).apply()
-                dialog.dismiss()
-                onSorted()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        val options=arrayOf("New to old","Old to new"); val checked=if(savedSortNewestFirst)0 else 1
+        AlertDialog.Builder(this).setTitle("Sort saved files").setSingleChoiceItems(options,checked){dialog,which->savedSortNewestFirst=which==0;prefs.edit().putBoolean("saved_sort_newest_first",savedSortNewestFirst).apply();dialog.dismiss();onSorted()}.setNegativeButton("Cancel",null).show()
     }
 
     private fun showSettings() {
-        selectedTab = 2
-        refreshBottomNav()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24,18,24,18)
-            setBackgroundColor(Color.WHITE)
-        }
-        val title = TextView(this).apply {
-            text = "Settings"
-            textSize = 24f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.rgb(180,25,25))
-            gravity = Gravity.CENTER
-        }
-        root.addView(title, lp(-1,55))
-
-        val backup = button("Google Drive Backup & Restore")
-        backup.setOnClickListener { showBackupDialog() }
-        root.addView(backup, lp(-1,56))
-
-        val backupNowButton = button("☁  Backup Now")
-        backupNowButton.setOnClickListener {
-            val folder = prefs.getString(backupFolderKey, null)
-            if (folder.isNullOrBlank()) chooseBackupFolder() else backupNow()
-        }
-        root.addView(backupNowButton, lp(-1,56))
-
-        backupStatusView = TextView(this).apply {
-            textSize = 14f
-            setPadding(12, 8, 12, 12)
-        }
-        root.addView(backupStatusView, lp(-1,ViewGroup.LayoutParams.WRAP_CONTENT))
-        updateBackupStatusView()
-
-        val updateButton = button("App Update")
-        updateButton.setOnClickListener { checkForUpdates(true) }
-        root.addView(updateButton, lp(-1,56))
-
-        val profile = button("Profile\nApp Developer: Biswajit Das")
-        profile.setOnClickListener { showProfile() }
-        root.addView(profile, lp(-1,72))
-
-        mainContent.removeAllViews()
-        mainContent.addView(root, FrameLayout.LayoutParams(-1,-1))
+        selectedTab=2; refreshBottomNav()
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(247,248,250));setPadding(dp(14),dp(8),dp(14),dp(14))}
+        val scroll=ScrollView(this); val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}; scroll.addView(content); appHeader(content)
+        content.addView(TextView(this).apply{text="⚙  Settings";textSize=21f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(20,28,36));setPadding(dp(6),dp(4),0,dp(8))},lp(-1,dp(44)))
+        val backup=settingCard("◆","Google Drive Backup & Restore","Backup your lists, restore, and manage\nGoogle Drive connection").apply{setOnClickListener{showBackupDialog()}}
+        val update=settingCard("⟳","App Update","Check for new version and update\nyour app").apply{setOnClickListener{checkForUpdates(true)}}
+        val profile=settingCard("●","Profile","App Developer\nBiswajit Das").apply{setOnClickListener{showProfile()}}
+        content.addView(backup,lp(-1,dp(92)));content.addView(update,lp(-1,dp(92)));content.addView(profile,lp(-1,dp(92)))
+        content.addView(TextView(this).apply{text="App Preferences";textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(30,38,46));setPadding(dp(6),dp(15),0,dp(8))},lp(-1,dp(42)))
+        content.addView(prefRow("◉","Theme","Light"),lp(-1,dp(54)))
+        content.addView(prefRow("▣","Auto Save","On"),lp(-1,dp(54)))
+        content.addView(prefRow("▦","Date Format","DD/MM/YYYY"),lp(-1,dp(54)))
+        content.addView(prefRow("▥","Clear App Data",">"),lp(-1,dp(54)))
+        content.addView(TextView(this).apply{text="About";textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(30,38,46));setPadding(dp(6),dp(15),0,dp(8))},lp(-1,dp(42)))
+        content.addView(settingCard("ⓘ","Digital Vision List","Version ${currentVersionName()}").apply{setOnClickListener{showProfile()}},lp(-1,dp(72)))
+        root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f)); mainContent.removeAllViews();mainContent.addView(root,FrameLayout.LayoutParams(-1,-1))
+        // Status is kept available through the backup dialog and internal state, but the reference UI remains clean.
+        backupStatusView=TextView(this); updateBackupStatusView()
     }
 
-    private fun showProfile() {
-        AlertDialog.Builder(this)
-            .setTitle("Profile")
-            .setMessage("App Developer\n\nBiswajit Das")
-            .setPositiveButton("OK", null)
-            .show()
+    private fun settingCard(icon:String,title:String,subtitle:String): LinearLayout=LinearLayout(this).apply{
+        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(8),dp(10),dp(8));background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235));elevation=dp(1).toFloat()
+        addView(TextView(this@MainActivity).apply{text=icon;textSize=27f;gravity=Gravity.CENTER;setTextColor(Color.rgb(25,38,50))},LinearLayout.LayoutParams(dp(54),-1))
+        val info=LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
+        info.addView(TextView(this@MainActivity).apply{text=title;textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(25,32,40))})
+        info.addView(TextView(this@MainActivity).apply{text=subtitle;textSize=11f;setTextColor(Color.rgb(88,97,106))})
+        addView(info,LinearLayout.LayoutParams(0,-1,1f));addView(TextView(this@MainActivity).apply{text="›";textSize=28f;gravity=Gravity.CENTER;setTextColor(Color.rgb(30,40,50))},LinearLayout.LayoutParams(dp(28),-1))
+    }
+
+    private fun prefRow(icon:String,title:String,value:String):LinearLayout=LinearLayout(this).apply{
+        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(10),0,dp(10),0);background=roundedBg(Color.WHITE,0f,Color.rgb(232,234,237))
+        addView(TextView(this@MainActivity).apply{text=icon;textSize=21f;gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(42),-1))
+        addView(TextView(this@MainActivity).apply{text=title;textSize=14f;setTextColor(Color.rgb(40,48,56))},LinearLayout.LayoutParams(0,-1,1f))
+        addView(TextView(this@MainActivity).apply{text=value;textSize=12f;setTextColor(Color.rgb(95,102,110));gravity=Gravity.CENTER_VERTICAL},LinearLayout.LayoutParams(dp(105),-1))
+        addView(TextView(this@MainActivity).apply{text="›";textSize=24f;gravity=Gravity.CENTER},LinearLayout.LayoutParams(dp(24),-1))
+    }
+
+    private fun actionCard(icon:String,title:String,subtitle:String):LinearLayout=LinearLayout(this).apply{
+        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(10),dp(8),dp(8),dp(8));background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235));elevation=dp(1).toFloat()
+        addView(TextView(this@MainActivity).apply{text=icon;textSize=27f;gravity=Gravity.CENTER;setTextColor(Color.rgb(25,38,50))},LinearLayout.LayoutParams(dp(48),-1))
+        val info=LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
+        info.addView(TextView(this@MainActivity).apply{text=title;textSize=13f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(25,32,40))})
+        info.addView(TextView(this@MainActivity).apply{text=subtitle;textSize=10f;setTextColor(Color.rgb(95,102,110))})
+        addView(info,LinearLayout.LayoutParams(0,-1,1f))
+    }
+
+    private fun tableCell(text:String,weight:Float,bold:Boolean):TextView=TextView(this).apply{
+        this.text=text;textSize=12f;gravity=Gravity.CENTER;setTextColor(Color.rgb(45,53,61));if(bold)typeface=Typeface.DEFAULT_BOLD
+        layoutParams=LinearLayout.LayoutParams(0,-1).apply{this.weight=weight}
     }
 
     private fun addRow() {
-        rows.add(Row("", 1))
-        render()
-        saveCurrent()
+        rows.add(Row("",1)); render(); saveCurrent()
     }
 
     private fun render() {
-        if (!::container.isInitialized) return
-        container.removeAllViews()
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 8, 8, 8)
-            setBackgroundColor(Color.rgb(245, 245, 245))
-        }
-        header.addView(cellText("SL", 0.8f, true))
-        header.addView(cellText("Item", 3.8f, true))
-        header.addView(cellText("Qty", 1.4f, true))
-        header.addView(cellText("", 0.8f, true))
-        container.addView(header)
-
-        rows.forEachIndexed { index, r ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(4, 2, 4, 2)
-            }
-
-            val sl = TextView(this).apply {
-                text = (index + 1).toString()
-                gravity = Gravity.CENTER
-                textSize = 15f
-            }
-            row.addView(sl, lp(0, 48, 0.8f))
-
-            val item = EditText(this).apply {
-                setText(r.item)
-                hint = "Enter item"
-                textSize = 15f
-                setSingleLine(true)
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                setPadding(8, 0, 8, 0)
-                setOnFocusChangeListener { _, hasFocus ->
-                    if (!hasFocus) {
-                        r.item = text.toString()
-                        saveCurrent()
-                    }
-                }
-            }
-            row.addView(item, lp(0, 48, 3.8f))
-
-            val qty = EditText(this).apply {
-                setText(r.qty.toString())
-                hint = "0"
-                textSize = 15f
-                gravity = Gravity.CENTER
-                setSingleLine(true)
-                inputType = android.text.InputType.TYPE_CLASS_NUMBER
-                setPadding(4, 0, 4, 0)
-                setOnFocusChangeListener { _, hasFocus ->
-                    if (!hasFocus) {
-                        r.qty = text.toString().toIntOrNull() ?: 0
-                        if (text.toString().isBlank()) setText("0")
-                        updateTotal()
-                        saveCurrent()
-                    }
-                }
-                addTextChangedListener(object : android.text.TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                        r.qty = s?.toString()?.toIntOrNull() ?: 0
-                        updateTotal()
-                    }
-                    override fun afterTextChanged(s: android.text.Editable?) {}
-                })
-            }
-            row.addView(qty, lp(0, 48, 1.4f))
-
-            val delete = Button(this).apply {
-                text = "×"
-                textSize = 20f
-                setPadding(0, 0, 0, 0)
-                setOnClickListener {
-                    if (rows.size > 1) rows.removeAt(index)
-                    else rows[0] = Row("", 1)
-                    render()
-                    saveCurrent()
-                }
-            }
-            row.addView(delete, lp(0, 48, 0.8f))
-            container.addView(row)
+        if(!::container.isInitialized)return
+        container.removeViews(1, maxOf(0,container.childCount-1))
+        rows.forEachIndexed { index,r ->
+            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(2),0,dp(2),0);background=if(index%2==0)Color.WHITE else Color.rgb(250,251,252)}
+            row.addView(TextView(this).apply{text="${index+1}";textSize=13f;gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(48),0.65f))
+            val item=EditText(this).apply{setText(r.item);hint="Enter item";textSize=13f;setSingleLine(true);setBackgroundColor(Color.TRANSPARENT);setPadding(dp(6),0,dp(4),0);inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;setOnFocusChangeListener{_,focus->if(!focus){r.item=text.toString();saveCurrent()}}}
+            row.addView(item,LinearLayout.LayoutParams(0,dp(48),2.85f))
+            val qty=EditText(this).apply{setText(r.qty.toString());textSize=13f;gravity=Gravity.CENTER;setSingleLine(true);setBackgroundColor(Color.TRANSPARENT);inputType=android.text.InputType.TYPE_CLASS_NUMBER;setOnFocusChangeListener{_,focus->if(!focus){r.qty=text.toString().toIntOrNull()?:0;updateTotal();saveCurrent()}};addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){r.qty=s?.toString()?.toIntOrNull()?:0;updateTotal()};override fun afterTextChanged(s:android.text.Editable?){} })}
+            row.addView(qty,LinearLayout.LayoutParams(0,dp(48),0.95f))
+            row.addView(TextView(this).apply{text="▮";textSize=14f;gravity=Gravity.CENTER;setTextColor(Color.rgb(225,31,38));setOnClickListener{if(rows.size>1)rows.removeAt(index)else rows[0]=Row("",1);render();saveCurrent()}},LinearLayout.LayoutParams(0,dp(48),0.55f))
+            container.addView(row,LinearLayout.LayoutParams(-1,dp(48)))
         }
         updateTotal()
     }
-
-    private fun cellText(textValue: String, weight: Float, bold: Boolean): TextView {
-        return TextView(this).apply {
-            text = textValue
-            gravity = Gravity.CENTER
-            textSize = 14f
-            if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(0, 44).apply { this.weight = weight }
-        }
-    }
-
 
     private fun saveCurrent() {
         if (!::shop.isInitialized || !::orderTo.isInitialized || !::date.isInitialized) return
@@ -535,7 +521,7 @@ class MainActivity : Activity() {
             }
             if (::shop.isInitialized) shop.setText(o.optString("shop","Digital Vision"))
             if (::orderTo.isInitialized) orderTo.setText(o.optString("orderTo",""))
-            if (::date.isInitialized) date.text = o.optString("date", SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date()))
+            if (::date.isInitialized) date.text = o.optString("date", SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()))
         } catch (_: Exception) { rows.clear() }
     }
 
@@ -562,7 +548,7 @@ class MainActivity : Activity() {
         rows.clear()
         shop.setText("Digital Vision")
         orderTo.setText("")
-        date.text = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
+        date.text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
         prefs.edit().remove("current_history_name").apply()
         addRow()
         Toast.makeText(this, "New list started. Previous list saved to History.", Toast.LENGTH_SHORT).show()
@@ -714,7 +700,7 @@ class MainActivity : Activity() {
             }
             shop.setText(o.optString("shop","Digital Vision"))
             orderTo.setText(o.optString("orderTo",""))
-            date.text=o.optString("date", SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date()))
+            date.text=o.optString("date", SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()))
             prefs.edit().putString("current_history_name", o.optString("historyName", o.optString("date",""))).apply()
             render()
             saveCurrent()
@@ -1186,15 +1172,20 @@ class MainActivity : Activity() {
         } catch (_:Exception) { Toast.makeText(this,"Restore failed. Please select a valid Digital Vision backup.",Toast.LENGTH_LONG).show() }
     }
 
-    private fun updateTotal(){ total.text="Total Quantity: ${rows.sumOf{it.qty}}" }
-
-    private fun listHeader(l:LinearLayout,s:String,w:Float){
-        val t=TextView(this).apply{text=s; textSize=16f; setTypeface(null,Typeface.BOLD); gravity=Gravity.CENTER; setTextColor(Color.WHITE); setBackgroundColor(Color.rgb(45,45,45))}
-        l.addView(t,LinearLayout.LayoutParams(0,-1,w))
+    private fun updateTotal(){
+        if(::total.isInitialized) total.text="Total Quantity: ${rows.sumOf{it.qty}}"
+        summaryItems?.text = "Items: ${rows.size}"
+        summaryQty?.text = "Total Qty: ${rows.sumOf{it.qty}}"
     }
-    private fun button(s:String)=Button(this).apply{text=s; textSize=12f}
 
     private fun lp(w:Int,h:Int,weight:Float=0f)=LinearLayout.LayoutParams(w,h).apply { this.weight=weight }
+
+    private fun shareOrPrint(forceWhatsApp:Boolean=false){
+        if(lastExportUri==null){ exportJpg(); return }
+        val send=Intent(Intent.ACTION_SEND).apply{type="image/jpeg";putExtra(Intent.EXTRA_STREAM,lastExportUri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+        if(forceWhatsApp) send.setPackage("com.whatsapp")
+        try{startActivity(send)}catch(_:Exception){startActivity(Intent.createChooser(send,"Share JPG"))}
+    }
 
     private fun exportJpg(){
         // Sync current editor values
@@ -1237,9 +1228,8 @@ class MainActivity : Activity() {
         val uri=contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)
         uri?.let{
             contentResolver.openOutputStream(it)?.use{out->bmp.compress(Bitmap.CompressFormat.JPEG,95,out)}
+            lastExportUri = it
             Toast.makeText(this,"JPG saved to Pictures/Digital Vision",Toast.LENGTH_LONG).show()
-            val send=Intent(Intent.ACTION_SEND).apply{type="image/jpeg";putExtra(Intent.EXTRA_STREAM,it);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
-            startActivity(Intent.createChooser(send,"Share JPG"))
         }
     }
 }

@@ -1,4 +1,4 @@
-# Digital Vision List
+# Digital Vision
 
 Android app for creating, saving, exporting and sharing shop lists.
 

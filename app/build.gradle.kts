@@ -11,12 +11,8 @@ android {
         applicationId = "com.digitalvision.listapp"
         minSdk = 24
         targetSdk = 36
-
-    buildFeatures {
-        buildConfig = true
-    }
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 11
+        versionName = "1.8.2"
     }
 
     compileOptions {
@@ -26,6 +22,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 

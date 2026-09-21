@@ -1,9 +1,10 @@
 <resources>
-<style name="Theme.DigitalVisionList" parent="android:style/Theme.Material.Light.NoActionBar">
-    <item name="android:fontFamily">sans</item>
-    <item name="android:colorAccent">#D32F2F</item>
-    <item name="android:navigationBarColor">#FFFFFF</item>
-    <item name="android:statusBarColor">#111111</item>
-    <item name="android:windowLightStatusBar">false</item>
-</style>
+    <style name="Theme.DigitalVisionList" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#E11F26</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
 </resources>
