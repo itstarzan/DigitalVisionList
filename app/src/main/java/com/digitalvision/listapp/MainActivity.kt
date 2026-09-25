@@ -2,6 +2,7 @@ package com.digitalvision.listapp
 
 import android.app.*
 import android.os.Bundle
+import android.os.Build
 import android.os.Environment
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
@@ -19,9 +20,46 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 import java.io.File
+import java.io.FileOutputStream
 import java.net.URL
 import java.net.HttpURLConnection
 import androidx.core.content.FileProvider
+
+private class MaterialIconView(context: Context, private val kind: String) : View(context) {
+    var iconColor: Int = Color.rgb(31,43,55)
+        set(value) { field=value; invalidate() }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap=Paint.Cap.ROUND; strokeJoin=Paint.Join.ROUND }
+    private fun d(v:Float)=v*resources.displayMetrics.density
+    override fun onDraw(c: Canvas) {
+        super.onDraw(c)
+        val w=width.toFloat(); val h=height.toFloat(); val s=minOf(w,h)/24f; val ox=(w-24f*s)/2f; val oy=(h-24f*s)/2f
+        c.save(); c.translate(ox,oy); c.scale(s,s)
+        paint.color=iconColor; paint.style=Paint.Style.STROKE; paint.strokeWidth=2f
+        when(kind) {
+            "menu" -> { c.drawLine(3f,6f,21f,6f,paint); c.drawLine(3f,12f,21f,12f,paint); c.drawLine(3f,18f,21f,18f,paint) }
+            "add_circle" -> { c.drawCircle(12f,12f,9f,paint); c.drawLine(8f,12f,16f,12f,paint); c.drawLine(12f,8f,12f,16f,paint) }
+            "add" -> { c.drawLine(5f,12f,19f,12f,paint); c.drawLine(12f,5f,12f,19f,paint) }
+            "list" -> { paint.style=Paint.Style.FILL; c.drawCircle(5f,7f,1.5f,paint); c.drawCircle(5f,12f,1.5f,paint); c.drawCircle(5f,17f,1.5f,paint); c.drawRect(9f,6f,20f,8f,paint); c.drawRect(9f,11f,20f,13f,paint); c.drawRect(9f,16f,20f,18f,paint) }
+            "edit" -> {
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 2.0f
+                c.rotate(-45f, 12f, 12f)
+                c.drawLine(8f, 17f, 17f, 8f, paint)
+                c.drawLine(7f, 18f, 9f, 16f, paint)
+                c.drawLine(15.5f, 6.5f, 17.5f, 8.5f, paint)
+            }
+            "delete" -> { c.drawRect(6f,7f,18f,20f,paint); c.drawLine(9f,4f,15f,4f,paint); c.drawLine(5f,6f,19f,6f,paint); c.drawLine(10f,10f,10f,17f,paint); c.drawLine(14f,10f,14f,17f,paint) }
+            "save" -> { paint.style=Paint.Style.FILL; c.drawRect(4f,3f,20f,21f,paint); paint.color=Color.WHITE; c.drawRect(7f,5f,17f,10f,paint); c.drawCircle(12f,16f,3f,paint) }
+            "export" -> { c.drawRect(5f,5f,15f,19f,paint); c.drawLine(11f,13f,20f,4f,paint); c.drawLine(14f,4f,20f,4f,paint); c.drawLine(20f,4f,20f,10f,paint) }
+            "print" -> { c.drawRect(7f,3f,17f,8f,paint); c.drawRect(5f,8f,19f,16f,paint); c.drawRect(7f,14f,17f,21f,paint) }
+            "share" -> { paint.style=Paint.Style.FILL; c.drawCircle(6f,12f,2.5f,paint); c.drawCircle(17f,6f,2.5f,paint); c.drawCircle(17f,18f,2.5f,paint); paint.style=Paint.Style.STROKE; c.drawLine(8f,11f,15f,7f,paint); c.drawLine(8f,13f,15f,17f,paint) }
+            "home" -> { val p=Path(); p.moveTo(4f,11f); p.lineTo(12f,4f); p.lineTo(20f,11f); p.lineTo(18f,11f); p.lineTo(18f,20f); p.lineTo(13f,20f); p.lineTo(13f,14f); p.lineTo(11f,14f); p.lineTo(11f,20f); p.lineTo(6f,20f); p.lineTo(6f,11f); p.close(); paint.style=Paint.Style.STROKE; c.drawPath(p,paint) }
+            "folder" -> { paint.style=Paint.Style.FILL; c.drawRoundRect(3f,6f,21f,19f,2f,2f,paint); c.drawRect(5f,4f,12f,8f,paint) }
+            "settings" -> { paint.style=Paint.Style.STROKE; paint.strokeWidth=2.6f; c.drawCircle(12f,12f,3.5f,paint); c.drawCircle(12f,12f,8f,paint) }
+        }
+        c.restore()
+    }
+}
 
 data class Row(var item:String, var qty:Int)
 
@@ -59,9 +97,9 @@ class MainActivity : Activity() {
     private var selectedTab = 0
     private var savedSortNewestFirst = true
     private lateinit var mainContent: FrameLayout
-    private lateinit var bottomHome: TextView
-    private lateinit var bottomSaved: TextView
-    private lateinit var bottomSettings: TextView
+    private lateinit var bottomHome: LinearLayout
+    private lateinit var bottomSaved: LinearLayout
+    private lateinit var bottomSettings: LinearLayout
 
     private var summaryItems: TextView? = null
     private var summaryQty: TextView? = null
@@ -90,9 +128,9 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.WHITE)
             elevation = dp(8).toFloat()
         }
-        bottomHome = navItem("⌂", "Home")
-        bottomSaved = navItem("■", "Saved Files")
-        bottomSettings = navItem("⚙", "Settings")
+        bottomHome = navItem("home", "Home")
+        bottomSaved = navItem("folder", "Saved Files")
+        bottomSettings = navItem("settings", "Settings")
         nav.addView(bottomHome, LinearLayout.LayoutParams(0, dp(66), 1f))
         nav.addView(bottomSaved, LinearLayout.LayoutParams(0, dp(66), 1f))
         nav.addView(bottomSettings, LinearLayout.LayoutParams(0, dp(66), 1f))
@@ -101,13 +139,21 @@ class MainActivity : Activity() {
         showHome()
     }
 
-    private fun navItem(icon: String, label: String): TextView = TextView(this).apply {
-        text = "$icon\n$label"
-        textSize = 12f
+    private fun navItem(icon: String, label: String): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        typeface = Typeface.create("sans", Typeface.NORMAL)
-        setTextColor(Color.rgb(28, 38, 48))
         setPadding(0, dp(2), 0, 0)
+        val iconView = MaterialIconView(this@MainActivity, icon).apply {
+            iconColor = Color.rgb(31, 43, 55)
+        }
+        addView(iconView, LinearLayout.LayoutParams(dp(24), dp(24)))
+        addView(TextView(this@MainActivity).apply {
+            text = label
+            textSize = 12f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT
+            setTextColor(Color.rgb(31, 43, 55))
+        }, LinearLayout.LayoutParams(-1, dp(22)))
         setOnClickListener {
             when (label) {
                 "Home" -> showHome()
@@ -115,13 +161,16 @@ class MainActivity : Activity() {
                 "Settings" -> showSettings()
             }
         }
+        tag = iconView
     }
 
     private fun refreshBottomNav() {
-        val active = Color.rgb(230, 35, 43)
+        val active = Color.rgb(225, 31, 38)
         val inactive = Color.rgb(31, 43, 55)
         listOf(bottomHome, bottomSaved, bottomSettings).forEachIndexed { i, v ->
-            v.setTextColor(if (selectedTab == i) active else inactive)
+            val color = if (selectedTab == i) active else inactive
+            (v.tag as? MaterialIconView)?.iconColor = color
+            (v.getChildAt(1) as? TextView)?.setTextColor(color)
             v.background = if (selectedTab == i) roundedBg(Color.rgb(255, 232, 234), 14f) else null
         }
     }
@@ -130,173 +179,427 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(5), dp(4), dp(7))
+            setPadding(dp(2), dp(2), dp(2), dp(4))
         }
-        val menu = TextView(this).apply {
-            text = "☰"
-            textSize = 27f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(20, 29, 38))
-        }
-        header.addView(menu, LinearLayout.LayoutParams(dp(42), dp(54)))
 
+        // Left menu
+        val menu = MaterialIconView(this, "menu").apply {
+            iconColor = Color.rgb(20, 29, 38)
+        }
+
+        header.addView(
+            menu,
+            LinearLayout.LayoutParams(dp(42), dp(54))
+        )
+
+        // Center logo
         val logo = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        val brand = TextView(this).apply {
-            text = "DIGITAL "
-            textSize = 22f
-            typeface = Typeface.create("sans", Typeface.BOLD)
-            setTextColor(Color.rgb(16, 24, 31))
+
+        val brandLine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val brandLine = LinearLayout(this)
-        brandLine.gravity = Gravity.CENTER
-        brandLine.addView(brand, LinearLayout.LayoutParams(-2, -2))
-        val vision = TextView(this).apply {
-            text = "VISION"
-            textSize = 22f
-            typeface = Typeface.create("sans", Typeface.BOLD)
-            setTextColor(Color.rgb(225, 31, 38))
-        }
-        brandLine.addView(vision)
+
+        brandLine.addView(
+            TextView(this).apply {
+                text = "DIGITAL "
+                textSize = 21f
+                typeface = Typeface.create("sans", Typeface.BOLD)
+                setTextColor(Color.rgb(16, 24, 31))
+            },
+            LinearLayout.LayoutParams(-2, -2)
+        )
+
+        brandLine.addView(
+            TextView(this).apply {
+                text = "VISION"
+                textSize = 21f
+                typeface = Typeface.create("sans", Typeface.BOLD)
+                setTextColor(Color.rgb(225, 31, 38))
+            },
+            LinearLayout.LayoutParams(-2, -2)
+        )
+
         logo.addView(brandLine)
-        logo.addView(TextView(this).apply {
-            text = "Mobile Repair Shop"
-            textSize = 11f
-            setTextColor(Color.rgb(80, 88, 96))
-            gravity = Gravity.CENTER
-        })
-        header.addView(logo, LinearLayout.LayoutParams(0, dp(54), 1f))
 
-        val slogan = TextView(this).apply {
-            text = "Repair\nConnect\nGrow"
-            textSize = 11f
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("cursive", Typeface.ITALIC)
-            setTextColor(Color.rgb(35, 35, 35))
-        }
-        header.addView(slogan, LinearLayout.LayoutParams(dp(62), dp(54)))
-        parent.addView(header, lp(-1, dp(68)))
+        logo.addView(
+            TextView(this).apply {
+                text = "Mobile Repair Shop"
+                textSize = 10f
+                setTextColor(Color.rgb(80, 88, 96))
+                gravity = Gravity.CENTER
+            },
+            LinearLayout.LayoutParams(-2, dp(18))
+        )
+
+        header.addView(
+            logo,
+            LinearLayout.LayoutParams(0, dp(54), 1f)
+        )
+
+        // Right spacer keeps the logo genuinely centered.
+        header.addView(
+            Space(this),
+            LinearLayout.LayoutParams(dp(42), dp(54))
+        )
+
+        parent.addView(
+            header,
+            lp(-1, dp(60))
+        )
     }
-
     private fun showHome() {
         selectedTab = 0
         refreshBottomNav()
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(247, 248, 250))
         }
-        val scroll = ScrollView(this)
+        root.setOnApplyWindowInsetsListener { view, insets ->
+            val topInset = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                insets.getInsets(WindowInsets.Type.statusBars()).top
+            } else {
+                @Suppress("DEPRECATION")
+                insets.systemWindowInsetTop
+            }
+
+            view.setPadding(
+                view.paddingLeft,
+                topInset,
+                view.paddingRight,
+                view.paddingBottom
+            )
+
+            insets
+        }
+
+        root.requestApplyInsets()
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(18))
+            setPadding(dp(14), dp(2), dp(14), dp(10))
         }
+
         scroll.addView(content)
+
+        // ─────────────────────────────
+        // HEADER
+        // ─────────────────────────────
         appHeader(content)
 
-        // Keep the shop name internally for exports/backups without displaying an extra field.
-        shop = EditText(this).apply { setText("Digital Vision") }
+        // Keep shop name internally for exports/backups.
+        shop = EditText(this).apply {
+            setText("Digital Vision")
+        }
 
+        // ─────────────────────────────
+        // CURRENT LIST CARD
+        // ─────────────────────────────
         val currentCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = roundedBg(Color.WHITE, 17f, Color.rgb(230, 232, 235))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedBg(
+                Color.WHITE,
+                16f,
+                Color.rgb(229, 231, 234)
+            )
             elevation = dp(1).toFloat()
         }
-        val currentTop = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        currentTop.addView(TextView(this).apply {
-            text = "☷  Current List"
-            textSize = 19f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(22, 30, 38))
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+
+        val currentTop = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val currentTitle = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(MaterialIconView(this@MainActivity, "list").apply { iconColor = Color.rgb(22,30,38) }, LinearLayout.LayoutParams(dp(24),dp(24)))
+            addView(TextView(this@MainActivity).apply {
+                text = "Current List"; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(22,30,38)); gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8),0,0,0)
+            }, LinearLayout.LayoutParams(-1,-1))
+        }
+
+        currentTop.addView(
+            currentTitle,
+            LinearLayout.LayoutParams(0, dp(40), 1f)
+        )
+
         val summary = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
         }
-        summaryItems = TextView(this).apply { textSize = 13f; setTextColor(Color.DKGRAY); gravity = Gravity.RIGHT }
-        summaryQty = TextView(this).apply { textSize = 13f; setTextColor(Color.rgb(220, 31, 38)); gravity = Gravity.RIGHT; typeface = Typeface.DEFAULT_BOLD }
+
+        summaryItems = TextView(this).apply {
+            textSize = 12f
+            setTextColor(Color.rgb(90, 98, 106))
+            gravity = Gravity.END
+        }
+
+        summaryQty = TextView(this).apply {
+            textSize = 12f
+            setTextColor(Color.rgb(220, 31, 38))
+            gravity = Gravity.END
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
         summary.addView(summaryItems)
         summary.addView(summaryQty)
-        currentTop.addView(summary, LinearLayout.LayoutParams(dp(95), dp(48)))
+
+        currentTop.addView(
+            summary,
+            LinearLayout.LayoutParams(dp(82), dp(40))
+        )
+
         currentCard.addView(currentTop)
 
-        val table = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // ─────────────────────────────
+        // TABLE
+        // ─────────────────────────────
+        val table = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = roundedBg(Color.rgb(244, 246, 248), 10f)
+            gravity = Gravity.CENTER_VERTICAL
+            background = roundedBg(
+                Color.rgb(244, 246, 248),
+                9f
+            )
         }
+
         header.addView(tableCell("SL", 0.65f, true))
         header.addView(tableCell("Item Name", 2.85f, true))
         header.addView(tableCell("Qty", 0.95f, true))
         header.addView(tableCell("", 0.55f, true))
-        table.addView(header, lp(-1, dp(42)))
+
+        table.addView(
+            header,
+            lp(-1, dp(36))
+        )
+
         container = table
         currentCard.addView(table)
-        content.addView(currentCard, lp(-1, -2))
 
+        content.addView(
+            currentCard,
+            lp(-1, ViewGroup.LayoutParams.WRAP_CONTENT)
+        )
+
+        // ─────────────────────────────
+        // ORDER TO
+        // ─────────────────────────────
         orderTo = EditText(this).apply {
             hint = "Order To"
-            textSize = 14f
+            textSize = 13f
             setSingleLine(true)
-            setPadding(dp(12), 0, dp(42), 0)
-            background = roundedBg(Color.WHITE, 12f, Color.rgb(225, 228, 232))
+            setPadding(dp(12), 0, dp(40), 0)
+            background = roundedBg(
+                Color.WHITE,
+                11f,
+                Color.rgb(225, 228, 232)
+            )
         }
-        val orderBox = FrameLayout(this)
-        orderBox.addView(orderTo, FrameLayout.LayoutParams(-1, dp(52)))
-        orderBox.addView(TextView(this).apply {
-            text = "✎"
-            textSize = 21f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(25, 35, 45))
-        }, FrameLayout.LayoutParams(dp(42), dp(52), Gravity.END))
-        content.addView(orderBox, lp(-1, dp(64)))
 
+        val orderBox = FrameLayout(this)
+
+        orderBox.addView(
+            orderTo,
+            FrameLayout.LayoutParams(
+                -1,
+                dp(46)
+            )
+        )
+
+        orderBox.addView(
+            MaterialIconView(this, "edit").apply {
+                iconColor = Color.rgb(35,45,55)
+            },
+            FrameLayout.LayoutParams(
+                dp(28),
+                dp(28),
+                Gravity.END or Gravity.CENTER_VERTICAL
+            ).apply {
+                rightMargin = dp(12)
+            }
+        )
+
+        content.addView(
+            orderBox,
+            lp(-1, dp(52))
+        )
+
+        // ─────────────────────────────
+        // DATE
+        // ─────────────────────────────
         date = TextView(this).apply {
-            text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
-            textSize = 15f
-            setTextColor(Color.rgb(25, 35, 45))
-            typeface = Typeface.DEFAULT_BOLD
+            text = SimpleDateFormat(
+                "dd/MM/yyyy",
+                Locale.getDefault()
+            ).format(Date())
+
+            textSize = 12f
+            setTextColor(Color.rgb(80, 88, 96))
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(4), 0, 0, 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                val current = try {
+                    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).parse(text.toString())
+                } catch (_: Exception) {
+                    Date()
+                }
+
+                val calendar = Calendar.getInstance().apply {
+                    time = current ?: Date()
+                }
+
+                DatePickerDialog(
+                    this@MainActivity,
+                    { _, year, month, dayOfMonth ->
+                        val selected = Calendar.getInstance().apply {
+                            set(year, month, dayOfMonth)
+                        }
+                        date.text = SimpleDateFormat(
+                            "dd/MM/yyyy",
+                            Locale.getDefault()
+                        ).format(selected.time)
+                        saveCurrent()
+                    },
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH)
+                ).show()
+            }
         }
-        content.addView(date, lp(-1, dp(30)))
 
-        val addItem = actionCard("⊕", "Add New Item", "Add another row")
-        addItem.setOnClickListener { addRow() }
-        content.addView(addItem, lp(-1, dp(58)))
+        content.addView(
+            date,
+            lp(-1, dp(24))
+        )
 
-        val actionGrid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // ─────────────────────────────
+        // ACTION GRID
+        // ─────────────────────────────
+        val actionGrid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
         fun gridRow(a: View, b: View) {
-            val r = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
-            r.addView(a, LinearLayout.LayoutParams(0, dp(84), 1f).apply { setMargins(0, dp(5), dp(4), 0) })
-            r.addView(b, LinearLayout.LayoutParams(0, dp(84), 1f).apply { setMargins(dp(4), dp(5), 0, 0) })
-            actionGrid.addView(r)
+            val r = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(4), 0, 0)
+            }
+
+            r.addView(
+                a,
+                LinearLayout.LayoutParams(
+                    0,
+                    dp(70),
+                    1f
+                ).apply {
+                    setMargins(0, 0, dp(3), 0)
+                }
+            )
+
+            r.addView(
+                b,
+                LinearLayout.LayoutParams(
+                    0,
+                    dp(70),
+                    1f
+                ).apply {
+                    setMargins(dp(3), 0, 0, 0)
+                }
+            )
+
+            actionGrid.addView(
+                r,
+                LinearLayout.LayoutParams(
+                    -1,
+                    dp(74)
+                )
+            )
         }
-        val save = actionCard("▣", "Save List", "Auto save to history").apply { setOnClickListener { addHistorySnapshot(); Toast.makeText(this@MainActivity, "List saved to history.", Toast.LENGTH_SHORT).show() } }
-        val export = actionCard("↗", "Export as JPG", "Save to Gallery").apply { setOnClickListener { exportJpg() } }
-        val print = actionCard("▣", "Print", "Share / Print").apply { setOnClickListener { shareOrPrint() } }
-        val share = actionCard("●", "Share", "Send via WhatsApp").apply { setOnClickListener { shareOrPrint(true) } }
+        val save = actionCard("save", "Save List", "Auto save to history").apply {
+            setOnClickListener {
+                addHistorySnapshot()
+                Toast.makeText(
+                    this@MainActivity,
+                    "List saved to history.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        val export = actionCard("export", "Export as JPG", "Save to Gallery").apply {
+            setOnClickListener { exportJpg() }
+        }
+        val print = actionCard("print", "Print", "Share / Print").apply {
+            setOnClickListener { printCurrentList() }
+        }
+        val share = actionCard("share", "Share", "Send via WhatsApp").apply {
+            setOnClickListener { shareCurrentList(true) }
+        }
         gridRow(save, export); gridRow(print, share)
         content.addView(actionGrid, lp(-1, dp(178)))
 
-        val newList = TextView(this).apply {
-            text = "＋  New List"
-            textSize = 15f
+        val newList = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            background = roundedBg(Color.rgb(225, 31, 38), 13f)
+            background = roundedBg(Color.rgb(225,31,38),12f)
+            addView(MaterialIconView(this@MainActivity,"add").apply { iconColor = Color.WHITE }, LinearLayout.LayoutParams(dp(22),dp(22)))
+            addView(TextView(this@MainActivity).apply {
+                text = "New List"; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE); gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(7),0,0,0)
+            }, LinearLayout.LayoutParams(-2,-1))
             setOnClickListener { startNewList() }
         }
-        content.addView(newList, lp(-1, dp(50)))
 
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        mainContent.removeAllViews(); mainContent.addView(root, FrameLayout.LayoutParams(-1, -1))
+        content.addView(
+            newList,
+            lp(-1, dp(46))
+        )
+
+        // Small bottom breathing room only.
+        content.addView(
+            Space(this),
+            lp(-1, dp(4))
+        )
+
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(
+                -1,
+                0,
+                1f
+            )
+        )
+
+        mainContent.removeAllViews()
+
+        mainContent.addView(
+            root,
+            FrameLayout.LayoutParams(-1, -1)
+        )
+
+        // Preserve existing state/functionality.
         loadSaved()
-        if (rows.isEmpty()) rows.add(Row("", 1))
+
+        if (rows.isEmpty()) {
+            rows.add(Row("", 1))
+        }
+
         render()
     }
 
@@ -437,11 +740,27 @@ class MainActivity : Activity() {
     }
 
     private fun actionCard(icon:String,title:String,subtitle:String):LinearLayout=LinearLayout(this).apply{
-        orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(10),dp(8),dp(8),dp(8));background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235));elevation=dp(1).toFloat()
-        addView(TextView(this@MainActivity).apply{text=icon;textSize=27f;gravity=Gravity.CENTER;setTextColor(Color.rgb(25,38,50))},LinearLayout.LayoutParams(dp(48),-1))
-        val info=LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
-        info.addView(TextView(this@MainActivity).apply{text=title;textSize=13f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(25,32,40))})
-        info.addView(TextView(this@MainActivity).apply{text=subtitle;textSize=10f;setTextColor(Color.rgb(95,102,110))})
+        orientation=LinearLayout.HORIZONTAL
+        gravity=Gravity.CENTER_VERTICAL
+        setPadding(dp(12),dp(7),dp(10),dp(7))
+        background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235))
+        elevation=dp(1).toFloat()
+
+        val iconBox = FrameLayout(this@MainActivity).apply {
+            background = roundedBg(Color.rgb(246,247,249), 28f)
+            val iv = MaterialIconView(this@MainActivity, icon)
+            iv.iconColor = Color.rgb(18,82,116)
+            addView(iv, FrameLayout.LayoutParams(dp(28),dp(28),Gravity.CENTER))
+        }
+        addView(iconBox,LinearLayout.LayoutParams(dp(56),dp(56)))
+
+        val info=LinearLayout(this@MainActivity).apply{
+            orientation=LinearLayout.VERTICAL
+            gravity=Gravity.CENTER_VERTICAL
+            setPadding(dp(10),0,0,0)
+        }
+        info.addView(TextView(this@MainActivity).apply{text=title;textSize=14f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(25,32,40))})
+        info.addView(TextView(this@MainActivity).apply{text=subtitle;textSize=11f;setTextColor(Color.rgb(95,102,110))})
         addView(info,LinearLayout.LayoutParams(0,-1,1f))
     }
 
@@ -450,23 +769,298 @@ class MainActivity : Activity() {
         layoutParams=LinearLayout.LayoutParams(0,-1).apply{this.weight=weight}
     }
 
-    private fun addRow() {
-        rows.add(Row("",1)); render(); saveCurrent()
+    private fun addRow(focusNewItem: Boolean = false) {
+        rows.add(Row("", 1))
+        render(if (focusNewItem) rows.lastIndex else -1)
+        saveCurrent()
     }
 
-    private fun render() {
-        if(!::container.isInitialized)return
-        container.removeViews(1, maxOf(0,container.childCount-1))
-        rows.forEachIndexed { index,r ->
-            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(2),0,dp(2),0);setBackgroundColor(if(index%2==0)Color.WHITE else Color.rgb(250,251,252))}
-            row.addView(TextView(this).apply{text="${index+1}";textSize=13f;gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,dp(48),0.65f))
-            val item=EditText(this).apply{setText(r.item);hint="Enter item";textSize=13f;setSingleLine(true);setBackgroundColor(Color.TRANSPARENT);setPadding(dp(6),0,dp(4),0);inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;setOnFocusChangeListener{_,focus->if(!focus){r.item=text.toString();saveCurrent()}}}
-            row.addView(item,LinearLayout.LayoutParams(0,dp(48),2.85f))
-            val qty=EditText(this).apply{setText(r.qty.toString());textSize=13f;gravity=Gravity.CENTER;setSingleLine(true);setBackgroundColor(Color.TRANSPARENT);inputType=android.text.InputType.TYPE_CLASS_NUMBER;setOnFocusChangeListener{_,focus->if(!focus){r.qty=text.toString().toIntOrNull()?:0;updateTotal();saveCurrent()}};addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){r.qty=s?.toString()?.toIntOrNull()?:0;updateTotal()};override fun afterTextChanged(s:android.text.Editable?){} })}
-            row.addView(qty,LinearLayout.LayoutParams(0,dp(48),0.95f))
-            row.addView(TextView(this).apply{text="▮";textSize=14f;gravity=Gravity.CENTER;setTextColor(Color.rgb(225,31,38));setOnClickListener{if(rows.size>1)rows.removeAt(index)else rows[0]=Row("",1);render();saveCurrent()}},LinearLayout.LayoutParams(0,dp(48),0.55f))
-            container.addView(row,LinearLayout.LayoutParams(-1,dp(48)))
+    private fun render(focusIndex: Int = -1) {
+        if (!::container.isInitialized) return
+
+        container.removeViews(1, maxOf(0, container.childCount - 1))
+
+        rows.forEachIndexed { index, r ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(2), 0, dp(2), 0)
+                setBackgroundColor(
+                    if (index % 2 == 0) Color.WHITE
+                    else Color.rgb(250, 251, 252)
+                )
+            }
+
+            row.addView(
+                TextView(this).apply {
+                    text = "${index + 1}"
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                },
+                LinearLayout.LayoutParams(0, dp(52), 0.65f)
+            )
+
+            val item = EditText(this).apply {
+                setText(r.item)
+                hint = "Enter item"
+                textSize = 13f
+                setSingleLine(false)
+                maxLines = 6
+                minLines = 1
+                setHorizontallyScrolling(false)
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(dp(6), dp(10), dp(4), dp(10))
+
+                inputType =
+                    android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+                    android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+
+                imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
+
+                setOnFocusChangeListener { _, focus ->
+                    if (!focus) {
+                        r.item = text.toString()
+                        saveCurrent()
+                    }
+                }
+
+                var creatingNextRow = false
+
+                addTextChangedListener(
+                    object : android.text.TextWatcher {
+                        override fun beforeTextChanged(
+                            s: CharSequence?,
+                            st: Int,
+                            c: Int,
+                            a: Int
+                        ) {}
+
+                        override fun onTextChanged(
+                            s: CharSequence?,
+                            st: Int,
+                            before: Int,
+                            count: Int
+                        ) {
+                            if (creatingNextRow) return
+
+                            val value = s?.toString().orEmpty()
+
+                            // Some soft keyboards insert a newline instead of
+                            // sending IME_ACTION_NEXT. Treat that newline as
+                            // Enter and immediately create the next row.
+                            if (value.contains("\n")) {
+                                creatingNextRow = true
+                                val cleaned = value.replace("\n", "")
+                                r.item = cleaned
+                                setText(cleaned)
+                                setSelection(cleaned.length)
+                                saveCurrent()
+                                post {
+                                    creatingNextRow = false
+                                    addRow(focusNewItem = true)
+                                }
+                                return
+                            }
+
+                            r.item = value
+                            row.requestLayout()
+                        }
+
+                        override fun afterTextChanged(
+                            s: android.text.Editable?
+                        ) {}
+                    }
+                )
+
+                setOnEditorActionListener { _, actionId, event ->
+                    val enterPressed =
+                        event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                        event.action == KeyEvent.ACTION_DOWN
+
+                    if (
+                        actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT ||
+                        actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE ||
+                        enterPressed
+                    ) {
+                        r.item = text.toString()
+                        saveCurrent()
+                        addRow(focusNewItem = true)
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                setOnKeyListener { _, keyCode, event ->
+                    if (
+                        keyCode == KeyEvent.KEYCODE_ENTER &&
+                        event.action == KeyEvent.ACTION_DOWN
+                    ) {
+                        r.item = text.toString()
+                        saveCurrent()
+                        addRow(focusNewItem = true)
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                setOnEditorActionListener { _, actionId, event ->
+                    val enterPressed =
+                        event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                        event.action == KeyEvent.ACTION_DOWN
+
+                    if (
+                        actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT ||
+                        actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE ||
+                        enterPressed
+                    ) {
+                        r.item = text.toString()
+                        saveCurrent()
+                        addRow(focusNewItem = true)
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                setOnKeyListener { _, keyCode, event ->
+                    if (
+                        keyCode == KeyEvent.KEYCODE_ENTER &&
+                        event.action == KeyEvent.ACTION_DOWN
+                    ) {
+                        r.item = text.toString()
+                        saveCurrent()
+                        addRow(focusNewItem = true)
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+
+            row.addView(
+                item,
+                LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    2.85f
+                )
+            )
+
+            item.minHeight = dp(52)
+
+            val qty = EditText(this).apply {
+                setText(r.qty.toString())
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setSingleLine(true)
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(0, dp(6), 0, dp(6))
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER
+
+                setOnFocusChangeListener { _, focus ->
+                    if (!focus) {
+                        r.qty = text.toString().toIntOrNull() ?: 0
+                        updateTotal()
+                        saveCurrent()
+                    }
+                }
+
+                addTextChangedListener(
+                    object : android.text.TextWatcher {
+                        override fun beforeTextChanged(
+                            s: CharSequence?,
+                            st: Int,
+                            c: Int,
+                            a: Int
+                        ) {}
+
+                        override fun onTextChanged(
+                            s: CharSequence?,
+                            st: Int,
+                            b: Int,
+                            c: Int
+                        ) {
+                            r.qty = s?.toString()?.toIntOrNull() ?: 0
+                            updateTotal()
+                        }
+
+                        override fun afterTextChanged(
+                            s: android.text.Editable?
+                        ) {}
+                    }
+                )
+            }
+
+            row.addView(
+                qty,
+                LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    0.95f
+                )
+            )
+
+            qty.minHeight = dp(52)
+
+            val deleteCell = FrameLayout(this).apply {
+                val del = MaterialIconView(this@MainActivity, "delete")
+                del.iconColor = Color.rgb(210, 31, 38)
+
+                addView(
+                    del,
+                    FrameLayout.LayoutParams(
+                        dp(24),
+                        dp(24),
+                        Gravity.CENTER
+                    )
+                )
+
+                setOnClickListener {
+                    if (rows.size > 1) {
+                        rows.removeAt(index)
+                    } else {
+                        rows[0] = Row("", 1)
+                    }
+                    render()
+                    saveCurrent()
+                }
+            }
+
+            row.addView(
+                deleteCell,
+                LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    0.55f
+                )
+            )
+
+            deleteCell.minimumHeight = dp(52)
+
+            row.minimumHeight = dp(52)
+
+            container.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    -1,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            if (index == focusIndex) {
+                item.post {
+                    item.requestFocus()
+                    item.setSelection(item.text.length)
+                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    imm.showSoftInput(item, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+            }
         }
+
         updateTotal()
     }
 
@@ -1188,56 +1782,578 @@ class MainActivity : Activity() {
 
     private fun lp(w:Int,h:Int,weight:Float=0f)=LinearLayout.LayoutParams(w,h).apply { this.weight=weight }
 
-    private fun shareOrPrint(forceWhatsApp:Boolean=false){
-        if(lastExportUri==null){ exportJpg(); return }
-        val send=Intent(Intent.ACTION_SEND).apply{type="image/jpeg";putExtra(Intent.EXTRA_STREAM,lastExportUri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
-        if(forceWhatsApp) send.setPackage("com.whatsapp")
-        try{startActivity(send)}catch(_:Exception){startActivity(Intent.createChooser(send,"Share JPG"))}
+    private fun shareCurrentList(preferWhatsApp: Boolean = false) {
+        // Always make sure the current editor contents are reflected in the JPG.
+        exportJpg()
+
+        val uri = lastExportUri
+        if (uri == null) {
+            Toast.makeText(
+                this,
+                "Could not create the JPG to share.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/jpeg"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        if (preferWhatsApp) {
+            val whatsapp = Intent(send).apply {
+                setPackage("com.whatsapp")
+            }
+
+            val whatsappBusiness = Intent(send).apply {
+                setPackage("com.whatsapp.w4b")
+            }
+
+            val initialTargets = ArrayList<Intent>(2)
+            val pm = packageManager
+
+            if (pm.resolveActivity(whatsapp, 0) != null) {
+                initialTargets.add(whatsapp)
+            }
+
+            if (pm.resolveActivity(whatsappBusiness, 0) != null) {
+                initialTargets.add(whatsappBusiness)
+            }
+
+            try {
+                val chooser = Intent.createChooser(
+                    send,
+                    "Share via WhatsApp"
+                )
+
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+                    initialTargets.isNotEmpty()
+                ) {
+                    chooser.putExtra(
+                        Intent.EXTRA_INITIAL_INTENTS,
+                        initialTargets.toTypedArray()
+                    )
+                }
+
+                startActivity(chooser)
+
+            } catch (_: Exception) {
+                try {
+                    startActivity(
+                        Intent.createChooser(send, "Share JPG")
+                    )
+                } catch (_: Exception) {
+                    Toast.makeText(
+                        this,
+                        "No app is available to share this JPG.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+        } else {
+            try {
+                startActivity(
+                    Intent.createChooser(send, "Share JPG")
+                )
+            } catch (_: Exception) {
+                Toast.makeText(
+                    this,
+                    "No app is available to share this JPG.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun printCurrentList() {
+        // Generate the same polished JPG used by Export/Share, then send it
+        // through Android's native print framework. This keeps the printed
+        // content independent from the Home-screen layout.
+        exportJpg()
+
+        val uri = lastExportUri
+        if (uri == null) {
+            Toast.makeText(
+                this,
+                "Could not prepare the list for printing.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        val printManager = getSystemService(Context.PRINT_SERVICE) as? android.print.PrintManager
+        if (printManager == null) {
+            Toast.makeText(
+                this,
+                "Printing is not available on this device.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        val jobName = "Digital Vision - ${date.text}"
+        printManager.print(
+            jobName,
+            JpgPrintAdapter(this, uri),
+            android.print.PrintAttributes.Builder()
+                .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
+                .setColorMode(android.print.PrintAttributes.COLOR_MODE_COLOR)
+                .setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS)
+                .build()
+        )
+    }
+
+    private class JpgPrintAdapter(
+        private val context: Context,
+        private val imageUri: Uri
+    ) : android.print.PrintDocumentAdapter() {
+
+        private var bitmap: Bitmap? = null
+
+        override fun onLayout(
+            oldAttributes: android.print.PrintAttributes?,
+            newAttributes: android.print.PrintAttributes,
+            cancellationSignal: android.os.CancellationSignal,
+            callback: android.print.PrintDocumentAdapter.LayoutResultCallback,
+            extras: Bundle?
+        ) {
+            if (cancellationSignal.isCanceled) {
+                callback.onLayoutCancelled()
+                return
+            }
+
+            try {
+                if (bitmap == null) {
+                    bitmap = context.contentResolver.openInputStream(imageUri)?.use {
+                        BitmapFactory.decodeStream(it)
+                    }
+                }
+
+                val info = android.print.PrintDocumentInfo.Builder("DigitalVisionList.jpg")
+                    .setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                    .setPageCount(1)
+                    .build()
+
+                callback.onLayoutFinished(info, false)
+            } catch (e: Exception) {
+                callback.onLayoutFailed(e.message ?: "Could not prepare the print job.")
+            }
+        }
+
+        override fun onWrite(
+            pages: Array<android.print.PageRange>,
+            destination: android.os.ParcelFileDescriptor,
+            cancellationSignal: android.os.CancellationSignal,
+            callback: android.print.PrintDocumentAdapter.WriteResultCallback
+        ) {
+            val source = bitmap
+            if (source == null) {
+                callback.onWriteFailed("Could not load the list image.")
+                return
+            }
+
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+
+            var pdf: android.graphics.pdf.PdfDocument? = null
+            try {
+                val pageWidth = 595
+                val pageHeight = 842
+                val document = android.graphics.pdf.PdfDocument()
+                pdf = document
+
+                val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(
+                    pageWidth,
+                    pageHeight,
+                    1
+                ).create()
+                val page = document.startPage(pageInfo)
+                val canvas = page.canvas
+
+                val availableWidth = pageWidth.toFloat()
+                val availableHeight = pageHeight.toFloat()
+                val scale = minOf(
+                    availableWidth / source.width.toFloat(),
+                    availableHeight / source.height.toFloat()
+                )
+                val drawWidth = source.width * scale
+                val drawHeight = source.height * scale
+                val left = (availableWidth - drawWidth) / 2f
+                val top = (availableHeight - drawHeight) / 2f
+
+                val dest = RectF(left, top, left + drawWidth, top + drawHeight)
+                canvas.drawColor(Color.WHITE)
+                canvas.drawBitmap(source, null, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                document.finishPage(page)
+
+                FileOutputStream(destination.fileDescriptor).use { out ->
+                    document.writeTo(out)
+                }
+
+                callback.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
+            } catch (e: Exception) {
+                callback.onWriteFailed(e.message ?: "Could not print the list.")
+            } finally {
+                pdf?.close()
+            }
+        }
     }
 
     private fun exportJpg(){
-        // Sync current editor values
+        // Sync the current editor values before exporting.
         for(i in 1 until container.childCount){
-            val row=container.getChildAt(i) as LinearLayout
+            val rowView = container.getChildAt(i) as? LinearLayout ?: continue
             val rowIndex = i - 1
-            if (rowIndex < rows.size) {
-                rows[rowIndex].item=(row.getChildAt(1) as EditText).text.toString()
-                rows[rowIndex].qty=(row.getChildAt(2) as EditText).text.toString().toIntOrNull()?:0
+            if(rowIndex < rows.size){
+                val itemView = rowView.getChildAt(1) as? EditText
+                val qtyView = rowView.getChildAt(2) as? EditText
+                rows[rowIndex].item = itemView?.text?.toString().orEmpty()
+                rows[rowIndex].qty = qtyView?.text?.toString()?.toIntOrNull() ?: 0
             }
         }
         saveCurrent()
-        val width=1080
-        val rowH=88
-        val height=290 + maxOf(rows.size,1)*rowH
-        val bmp=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
-        val c=Canvas(bmp); c.drawColor(Color.WHITE)
-        val p=Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color=Color.rgb(180,25,25); p.textSize=46f; p.typeface=Typeface.DEFAULT_BOLD
-        c.drawText(shop.text.toString().ifBlank{"Digital Vision"},50f,70f,p)
-        p.color=Color.DKGRAY; p.textSize=30f; p.typeface=Typeface.DEFAULT
-        c.drawText("Date: ${date.text}",50f,115f,p)
-        c.drawText("Order To: ${orderTo.text}",50f,150f,p)
-        p.color=Color.rgb(45,45,45); c.drawRect(35f,175f,1045f,250f,p)
-        p.color=Color.WHITE; p.textSize=30f; p.typeface=Typeface.DEFAULT_BOLD
-        c.drawText("S.No.",65f,225f,p); c.drawText("Item",250f,225f,p); c.drawText("Qty",900f,225f,p)
-        p.color=Color.BLACK; p.typeface=Typeface.DEFAULT; p.textSize=29f
-        rows.forEachIndexed { i,r ->
-            val y=305f+i*rowH
-            c.drawText("${i+1}",80f,y,p); c.drawText(r.item.take(38),250f,y,p); c.drawText("${r.qty}",920f,y,p)
-            p.color=0xFFE0E0E0.toInt(); c.drawRect(35f,y+20f,1045f,y+21f,p); p.color=Color.BLACK
-        }
-        p.typeface=Typeface.DEFAULT_BOLD; p.textSize=34f
-        c.drawText("Total Quantity: ${rows.sumOf{it.qty}}",700f,(height-35).toFloat(),p)
 
-        val safeDate = prefs.getString("current_history_name", SimpleDateFormat("dd/MM/yy",Locale.getDefault()).format(Date()))
-            ?.replace("/", "-") ?: SimpleDateFormat("dd-MM-yy",Locale.getDefault()).format(Date())
-        val name="DigitalVision_${safeDate}.jpg"
-        val values=ContentValues().apply{put(MediaStore.Images.Media.DISPLAY_NAME,name);put(MediaStore.Images.Media.MIME_TYPE,"image/jpeg");put(MediaStore.Images.Media.RELATIVE_PATH,"Pictures/Digital Vision")}
-        val uri=contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values)
-        uri?.let{
-            contentResolver.openOutputStream(it)?.use{out->bmp.compress(Bitmap.CompressFormat.JPEG,95,out)}
+        val width = 1080
+        val left = 64f
+        val right = 1016f
+        val tableWidth = right - left
+
+        // Refined column layout: slightly narrower S.No. and more room for details.
+        val serialRight = 158f
+        val itemLeft = 185f
+        val qtyLeft = 895f
+        val qtyRight = 985f
+        val itemWidth = qtyLeft - itemLeft - 22f
+
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(210, 31, 38)
+            textSize = 44f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val metaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(78, 84, 91)
+            textSize = 25f
+            typeface = Typeface.DEFAULT
+        }
+        val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 27f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(38, 42, 46)
+            textSize = 26f
+            typeface = Typeface.DEFAULT
+        }
+        val qtyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(38, 42, 46)
+            textSize = 26f
+            typeface = Typeface.DEFAULT
+            textAlign = Paint.Align.CENTER
+        }
+        val totalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(35, 39, 43)
+            textSize = 31f
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.RIGHT
+        }
+
+        fun wrapText(value: String, paint: Paint, maxWidth: Float): List<String> {
+            if(value.isBlank()) return listOf("")
+            val result = mutableListOf<String>()
+
+            value.split("\n").forEach { paragraph ->
+                if(paragraph.isEmpty()){
+                    result.add("")
+                    return@forEach
+                }
+
+                var remaining = paragraph.trim()
+                while(remaining.isNotEmpty()){
+                    var count = paint.breakText(
+                        remaining,
+                        true,
+                        maxWidth,
+                        null
+                    ).coerceAtLeast(1)
+
+                    if(count < remaining.length){
+                        val breakAt = remaining.substring(0, count).lastIndexOf(' ')
+                        if(breakAt > 0) count = breakAt
+                    }
+
+                    result.add(remaining.substring(0, count).trimEnd())
+                    remaining = remaining.substring(count).trimStart()
+                }
+            }
+
+            return if(result.isEmpty()) listOf("") else result
+        }
+
+        // Slightly more generous vertical padding keeps wrapped details visually centered.
+        val itemLineHeight = 36f
+        val rowVerticalPadding = 30f
+        val minRowHeight = 68f
+        val headerHeight = 70f
+
+        // Compact, balanced header area.
+        val titleBaseline = 84f
+        val dateBaseline = 124f
+        val orderBaseline = 158f
+        val tableTop = if(orderTo.text.toString().trim().isBlank()) 180f else 190f
+
+        val wrappedRows = rows.map { row ->
+            wrapText(row.item, bodyPaint, itemWidth)
+        }
+
+        val rowHeights = wrappedRows.map { lines ->
+            maxOf(
+                minRowHeight,
+                rowVerticalPadding + lines.size * itemLineHeight
+            )
+        }
+
+        val footerHeight = 104f
+        val totalHeight =
+            tableTop +
+            headerHeight +
+            rowHeights.sum() +
+            footerHeight
+
+        val bmp = Bitmap.createBitmap(
+            width,
+            totalHeight.toInt().coerceAtLeast(600),
+            Bitmap.Config.ARGB_8888
+        )
+
+        val c = Canvas(bmp)
+        c.drawColor(Color.WHITE)
+
+        // Digital Vision header.
+        val shopName = shop.text.toString().trim().ifBlank { "Digital Vision" }
+        c.drawText(shopName, left, titleBaseline, titlePaint)
+
+        c.drawText(
+            "Date: ${date.text}",
+            left,
+            dateBaseline,
+            metaPaint
+        )
+
+        val orderValue = orderTo.text.toString().trim()
+        if(orderValue.isNotBlank()){
+            c.drawText(
+                "Order To: $orderValue",
+                left,
+                orderBaseline,
+                metaPaint
+            )
+        }
+
+        // Dark table header.
+        val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(45, 50, 55)
+            style = Paint.Style.FILL
+        }
+
+        val headerBottom = tableTop + headerHeight
+        c.drawRoundRect(
+            left,
+            tableTop,
+            right,
+            headerBottom,
+            10f,
+            10f,
+            headerFill
+        )
+
+        val headerBaseline = tableTop + 44f
+
+        headerPaint.textAlign = Paint.Align.CENTER
+        c.drawText(
+            "S.No.",
+            (left + serialRight) / 2f,
+            headerBaseline,
+            headerPaint
+        )
+
+        headerPaint.textAlign = Paint.Align.LEFT
+        c.drawText(
+            "Item Name / Details",
+            itemLeft,
+            headerBaseline,
+            headerPaint
+        )
+
+        headerPaint.textAlign = Paint.Align.CENTER
+        c.drawText(
+            "Qty",
+            (qtyLeft + qtyRight) / 2f,
+            headerBaseline,
+            headerPaint
+        )
+
+        // Table rows.
+        var currentTop = headerBottom
+
+        rows.forEachIndexed { index, row ->
+            val rowHeight = rowHeights[index]
+            val lines = wrappedRows[index]
+
+            val rowFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if(index % 2 == 0) {
+                    Color.WHITE
+                } else {
+                    Color.rgb(249, 250, 251)
+                }
+                style = Paint.Style.FILL
+            }
+
+            c.drawRect(
+                left,
+                currentTop,
+                right,
+                currentTop + rowHeight,
+                rowFill
+            )
+
+            // Very subtle divider.
+            val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(229, 231, 233)
+                strokeWidth = 1f
+            }
+            c.drawLine(
+                left,
+                currentTop + rowHeight,
+                right,
+                currentTop + rowHeight,
+                divider
+            )
+
+            // Serial number centered in its column.
+            bodyPaint.textAlign = Paint.Align.CENTER
+            val rowCenter = currentTop + rowHeight / 2f
+            val serialMetrics = bodyPaint.fontMetrics
+            val serialBaseline =
+                rowCenter - (serialMetrics.ascent + serialMetrics.descent) / 2f
+
+            c.drawText(
+                "${index + 1}",
+                (left + serialRight) / 2f,
+                serialBaseline,
+                bodyPaint
+            )
+
+            // Item details with dynamic wrapping and comfortable padding.
+            bodyPaint.textAlign = Paint.Align.LEFT
+            val blockHeight = lines.size * itemLineHeight
+            var baseline =
+                currentTop +
+                (rowHeight - blockHeight) / 2f -
+                bodyPaint.fontMetrics.ascent
+
+            lines.forEach { line ->
+                c.drawText(
+                    line,
+                    itemLeft,
+                    baseline,
+                    bodyPaint
+                )
+                baseline += itemLineHeight
+            }
+
+            // Quantity centered in its own column.
+            qtyPaint.textAlign = Paint.Align.CENTER
+            val qtyMetrics = qtyPaint.fontMetrics
+            val qtyBaseline =
+                rowCenter - (qtyMetrics.ascent + qtyMetrics.descent) / 2f
+
+            c.drawText(
+                row.qty.toString(),
+                (qtyLeft + qtyRight) / 2f,
+                qtyBaseline,
+                qtyPaint
+            )
+
+            currentTop += rowHeight
+        }
+
+        // Subtle separator before the final total.
+        val totalDivider = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(218, 221, 224)
+            strokeWidth = 2f
+        }
+        c.drawLine(
+            left,
+            currentTop + 1f,
+            right,
+            currentTop + 1f,
+            totalDivider
+        )
+
+        // Total quantity with balanced right margin.
+        val totalLabel = "Total Quantity: ${rows.sumOf { it.qty }}"
+        c.drawText(
+            totalLabel,
+            right,
+            currentTop + 57f,
+            totalPaint
+        )
+
+        val safeDate = date.text.toString()
+            .ifBlank {
+                SimpleDateFormat(
+                    "dd/MM/yy",
+                    Locale.getDefault()
+                ).format(Date())
+            }
+            .replace("/", "-")
+
+        val name = "DigitalVision_${safeDate}.jpg"
+
+        val values = ContentValues().apply {
+            put(
+                MediaStore.Images.Media.DISPLAY_NAME,
+                name
+            )
+            put(
+                MediaStore.Images.Media.MIME_TYPE,
+                "image/jpeg"
+            )
+            put(
+                MediaStore.Images.Media.RELATIVE_PATH,
+                "Pictures/Digital Vision"
+            )
+        }
+
+        val uri = contentResolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values
+        )
+
+        uri?.let {
+            contentResolver.openOutputStream(it)?.use { out ->
+                bmp.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    95,
+                    out
+                )
+            }
+
             lastExportUri = it
-            Toast.makeText(this,"JPG saved to Pictures/Digital Vision",Toast.LENGTH_LONG).show()
+
+            Toast.makeText(
+                this,
+                "JPG saved to Pictures/Digital Vision",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
+
 }
