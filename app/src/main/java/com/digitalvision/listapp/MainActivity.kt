@@ -53,6 +53,23 @@ private class MaterialIconView(context: Context, private val kind: String) : Vie
             "export" -> { c.drawRect(5f,5f,15f,19f,paint); c.drawLine(11f,13f,20f,4f,paint); c.drawLine(14f,4f,20f,4f,paint); c.drawLine(20f,4f,20f,10f,paint) }
             "print" -> { c.drawRect(7f,3f,17f,8f,paint); c.drawRect(5f,8f,19f,16f,paint); c.drawRect(7f,14f,17f,21f,paint) }
             "share" -> { paint.style=Paint.Style.FILL; c.drawCircle(6f,12f,2.5f,paint); c.drawCircle(17f,6f,2.5f,paint); c.drawCircle(17f,18f,2.5f,paint); paint.style=Paint.Style.STROKE; c.drawLine(8f,11f,15f,7f,paint); c.drawLine(8f,13f,15f,17f,paint) }
+            "document" -> {
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = 2.2f
+                val p = Path(); p.moveTo(6f,3.5f); p.lineTo(15f,3.5f); p.lineTo(19.5f,8f); p.lineTo(19.5f,20.5f); p.lineTo(6f,20.5f); p.close(); c.drawPath(p, paint)
+                c.drawLine(15f,3.5f,15f,8f,paint); c.drawLine(15f,8f,19.5f,8f,paint)
+                c.drawLine(9f,12f,17f,12f,paint); c.drawLine(9f,16f,17f,16f,paint)
+            }
+            "star" -> {
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = 2.0f
+                val p=Path(); for(i in 0 until 10){ val a=Math.toRadians(-90.0 + i*36.0); val r=if(i%2==0)9.2 else 4.1; val x=12+r*Math.cos(a); val y=12+r*Math.sin(a); if(i==0)p.moveTo(x.toFloat(),y.toFloat()) else p.lineTo(x.toFloat(),y.toFloat()) }; p.close(); c.drawPath(p,paint)
+            }
+            "open" -> {
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = 2.1f
+                c.drawRect(4.5f,5.5f,15.5f,19.5f,paint); c.drawLine(10f,4.5f,19.5f,4.5f,paint); c.drawLine(19.5f,4.5f,19.5f,14f,paint); c.drawLine(19.5f,4.5f,10.5f,13.5f,paint)
+            }
+            "more" -> { paint.style=Paint.Style.FILL; c.drawCircle(12f,5.5f,1.7f,paint); c.drawCircle(12f,12f,1.7f,paint); c.drawCircle(12f,18.5f,1.7f,paint) }
+            "search" -> { paint.style=Paint.Style.STROKE; paint.strokeWidth=2.2f; c.drawCircle(10.5f,10.5f,6.2f,paint); c.drawLine(15f,15f,20f,20f,paint) }
+            "sort" -> { paint.style=Paint.Style.STROKE; paint.strokeWidth=2.0f; c.drawLine(5f,7f,19f,7f,paint); c.drawLine(5f,12f,16f,12f,paint); c.drawLine(5f,17f,13f,17f,paint) }
             "home" -> { val p=Path(); p.moveTo(4f,11f); p.lineTo(12f,4f); p.lineTo(20f,11f); p.lineTo(18f,11f); p.lineTo(18f,20f); p.lineTo(13f,20f); p.lineTo(13f,14f); p.lineTo(11f,14f); p.lineTo(11f,20f); p.lineTo(6f,20f); p.lineTo(6f,11f); p.close(); paint.style=Paint.Style.STROKE; c.drawPath(p,paint) }
             "folder" -> { paint.style=Paint.Style.FILL; c.drawRoundRect(3f,6f,21f,19f,2f,2f,paint); c.drawRect(5f,4f,12f,8f,paint) }
             "settings" -> { paint.style=Paint.Style.STROKE; paint.strokeWidth=2.6f; c.drawCircle(12f,12f,3.5f,paint); c.drawCircle(12f,12f,8f,paint) }
@@ -96,6 +113,8 @@ class MainActivity : Activity() {
 
     private var selectedTab = 0
     private var savedSortNewestFirst = true
+    private var savedRecentOnly = false
+    private val pinnedHistory = mutableSetOf<String>()
     private lateinit var mainContent: FrameLayout
     private lateinit var bottomHome: LinearLayout
     private lateinit var bottomSaved: LinearLayout
@@ -175,6 +194,23 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun applyScreenInsets(root: View) {
+        // Use the device's actual status-bar height as a fixed top inset.
+        // This keeps the header position identical on Home, Saved Files and Settings
+        // without re-applying insets after the screen becomes visible.
+        val statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android")
+            .takeIf { it > 0 }
+            ?.let { resources.getDimensionPixelSize(it) }
+            ?: dp(24)
+
+        root.setPadding(
+            root.paddingLeft,
+            statusBarHeight,
+            root.paddingRight,
+            root.paddingBottom
+        )
+    }
+
     private fun appHeader(parent: LinearLayout) {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -240,9 +276,17 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(0, dp(54), 1f)
         )
 
-        // Right spacer keeps the logo genuinely centered.
+        // Right-side permanent brand mark. Keep the right slot equal to the
+        // left menu slot so the DIGITAL VISION logo remains centered.
+        val rightBrand = ImageView(this).apply {
+            setImageResource(R.drawable.repair_connect_grow)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(2), dp(4), dp(2), dp(4))
+            contentDescription = "Repair Connect Grow"
+        }
+
         header.addView(
-            Space(this),
+            rightBrand,
             LinearLayout.LayoutParams(dp(42), dp(54))
         )
 
@@ -259,25 +303,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(247, 248, 250))
         }
-        root.setOnApplyWindowInsetsListener { view, insets ->
-            val topInset = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                insets.getInsets(WindowInsets.Type.statusBars()).top
-            } else {
-                @Suppress("DEPRECATION")
-                insets.systemWindowInsetTop
-            }
+        applyScreenInsets(root)
 
-            view.setPadding(
-                view.paddingLeft,
-                topInset,
-                view.paddingRight,
-                view.paddingBottom
-            )
-
-            insets
-        }
-
-        root.requestApplyInsets()
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -593,6 +620,8 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(-1, -1)
         )
 
+        // Now that Home is attached to the window, request the real status-bar
+        // inset so the header remains below the status bar after navigation.
         // Preserve existing state/functionality.
         loadSaved()
 
@@ -608,12 +637,15 @@ class MainActivity : Activity() {
         refreshBottomNav()
         loadHistory()
         savedSortNewestFirst = prefs.getBoolean("saved_sort_newest_first", true)
+        savedRecentOnly = false
+        loadPinnedHistory()
         val frame = FrameLayout(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(247, 248, 250))
-            setPadding(dp(14), dp(8), dp(14), 0)
+            setPadding(dp(14), 0, dp(14), 0)
         }
+        applyScreenInsets(root)
         appHeader(root)
         val title = TextView(this).apply {
             text = "Saved Files"
@@ -621,23 +653,47 @@ class MainActivity : Activity() {
             setPadding(dp(6),0,0,0)
         }
         root.addView(title, lp(-1, dp(42)))
-        val search = EditText(this).apply {
-            hint = "⌕  Search saved lists..."; textSize = 14f; setSingleLine(true); setPadding(dp(14),0,dp(14),0)
+        val searchBox = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12),0,dp(12),0)
             background = roundedBg(Color.WHITE, 14f, Color.rgb(228,230,234))
         }
-        root.addView(search, lp(-1, dp(48)))
+        searchBox.addView(MaterialIconView(this, "search").apply { iconColor = Color.rgb(85,95,105) }, LinearLayout.LayoutParams(dp(34),dp(48)))
+        val search = EditText(this).apply {
+            hint = "Search saved lists..."; textSize = 14f; setSingleLine(true); setPadding(dp(6),0,0,0); background = null
+        }
+        searchBox.addView(search, LinearLayout.LayoutParams(0,dp(48),1f))
+        root.addView(searchBox, lp(-1, dp(48)))
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0,dp(8),0,dp(5)) }
-        val all = pill("All Lists (${history.size})", true); val fav = pill("Favorites (0)", false); val recent = pill("Recent", false)
+        val all = pill("All Lists (${history.size})", true)
+        val recent = pill("Recent", false)
         tabs.addView(all, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(0,0,dp(4),0) })
-        tabs.addView(fav, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(2),0,dp(2),0) })
         tabs.addView(recent, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(4),0,0,0) })
         root.addView(tabs)
+
+        fun updateTabs() {
+            all.text = "All Lists (${history.size})"
+            all.setTextColor(if (!savedRecentOnly) Color.rgb(225,31,38) else Color.rgb(55,65,75))
+            all.background = roundedBg(if (!savedRecentOnly) Color.rgb(255,232,234) else Color.WHITE, 12f, Color.rgb(224,228,232))
+            recent.setTextColor(if (savedRecentOnly) Color.rgb(225,31,38) else Color.rgb(55,65,75))
+            recent.background = roundedBg(if (savedRecentOnly) Color.rgb(255,232,234) else Color.WHITE, 12f, Color.rgb(224,228,232))
+        }
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0,dp(4),0,dp(86)) }
+        all.setOnClickListener {
+            savedRecentOnly = false
+            updateTabs()
+            rebuildSavedFiles(list, search.text.toString())
+        }
+        recent.setOnClickListener {
+            savedRecentOnly = true
+            updateTabs()
+            rebuildSavedFiles(list, search.text.toString())
+        }
         val scroll = ScrollView(this).apply { addView(list) }
         root.addView(scroll, LinearLayout.LayoutParams(-1,0,1f))
         frame.addView(root, FrameLayout.LayoutParams(-1,-1))
-        val sortButton = TextView(this).apply {
-            text = "⇅"; textSize = 25f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); background = roundedBg(Color.rgb(225,31,38), 30f); elevation = dp(6).toFloat()
+        val sortButton = FrameLayout(this).apply {
+            background = roundedBg(Color.rgb(225,31,38), 30f); elevation = dp(6).toFloat()
+            addView(MaterialIconView(this@MainActivity, "sort").apply { iconColor = Color.WHITE }, FrameLayout.LayoutParams(dp(34),dp(34),Gravity.CENTER))
             setOnClickListener { showSortDialog { rebuildSavedFiles(list, search.text.toString()) } }
         }
         frame.addView(sortButton, FrameLayout.LayoutParams(dp(58),dp(58),Gravity.END or Gravity.BOTTOM).apply { setMargins(0,0,dp(18),dp(18)) })
@@ -657,35 +713,82 @@ class MainActivity : Activity() {
     }
 
     private fun rebuildSavedFiles(list: LinearLayout, query: String) {
-        loadHistory(); list.removeAllViews()
+        loadHistory()
+        loadPinnedHistory()
+        list.removeAllViews()
+
         val indexed = history.mapIndexed { index, raw -> index to raw }
-        val ordered = if(savedSortNewestFirst) indexed else indexed.reversed()
-        var shown=0
-        for((index,raw) in ordered){
-            try{
-                val o=JSONObject(raw); val name=o.optString("historyName",o.optString("date","Saved List")); val count=o.optJSONArray("rows")?.length()?:0
-                val order=o.optString("orderTo",""); val label="$name $order $count"
-                if(query.isNotBlank() && !label.contains(query,true)) continue
-                val card=LinearLayout(this).apply{
-                    orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(10),dp(8),dp(8),dp(8)); background=roundedBg(Color.WHITE,14f,Color.rgb(230,232,235)); elevation=dp(1).toFloat()
-                    setOnClickListener{showHistoryActions(index)}
+        val base = if (savedRecentOnly) indexed.take(5) else indexed
+        val ordered = if (savedRecentOnly || savedSortNewestFirst) base else base.reversed()
+        val pinned = ordered.filter { pinnedHistory.contains(it.second) }
+        val unpinned = ordered.filterNot { pinnedHistory.contains(it.second) }
+        val display = pinned + unpinned
+
+        var shown = 0
+        for ((index, raw) in display) {
+            try {
+                val o = JSONObject(raw)
+                val name = o.optString("historyName", o.optString("date", "Saved List"))
+                val count = o.optJSONArray("rows")?.length() ?: 0
+                val order = o.optString("orderTo", "")
+                val label = "$name $order $count"
+                if (query.isNotBlank() && !label.contains(query, true)) continue
+
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(10), dp(8), dp(8), dp(8))
+                    background = roundedBg(Color.WHITE, 14f, Color.rgb(230,232,235))
+                    elevation = dp(1).toFloat()
                 }
-                val icon=TextView(this).apply{text="▤";textSize=28f;gravity=Gravity.CENTER;setTextColor(Color.rgb(23,34,45))}
-                card.addView(icon,LinearLayout.LayoutParams(dp(48),dp(70)))
-                val info=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
-                info.addView(TextView(this).apply{text="List ${history.size-index}";textSize=15f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(22,30,38))})
-                info.addView(TextView(this).apply{text="${name}  •  $count items${if(order.isNotBlank()) "  •  $order" else ""}";textSize=11f;setTextColor(Color.rgb(90,98,106))})
-                card.addView(info,LinearLayout.LayoutParams(0,dp(70),1f))
-                val star=TextView(this).apply{text="☆";textSize=25f;gravity=Gravity.CENTER;setTextColor(Color.rgb(225,31,38))}
-                val open=TextView(this).apply{text="↗";textSize=24f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{restoreHistory(index)}}
-                val share=TextView(this).apply{text="●";textSize=18f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{restoreHistory(index);showHome();exportJpg()}}
-                val menu=TextView(this).apply{text="⋮";textSize=25f;gravity=Gravity.CENTER;setTextColor(Color.rgb(20,30,40));setOnClickListener{showHistoryActions(index)}}
-                list.addView(card,LinearLayout.LayoutParams(-1,dp(82)).apply{setMargins(0,0,0,dp(8))})
-                card.addView(star,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(open,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(share,LinearLayout.LayoutParams(dp(38),dp(70))); card.addView(menu,LinearLayout.LayoutParams(dp(32),dp(70)))
+
+                // Slightly smaller document icon to match the reference.
+                val icon = MaterialIconView(this, "document").apply {
+                    iconColor = Color.rgb(23,34,45)
+                }
+                card.addView(icon, LinearLayout.LayoutParams(dp(44), dp(60)))
+
+                val info = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                info.addView(TextView(this).apply {
+                    text = "List ${history.size - index}"
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(Color.rgb(22,30,38))
+                })
+                info.addView(TextView(this).apply {
+                    text = "${name}  •  $count items${if(order.isNotBlank()) "  •  $order" else ""}"
+                    textSize = 11f
+                    setTextColor(Color.rgb(90,98,106))
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                })
+                card.addView(info, LinearLayout.LayoutParams(0, dp(60), 1f))
+
+                val menu = MaterialIconView(this, "more").apply {
+                    iconColor = Color.rgb(20,30,40)
+                    setOnClickListener { showHistoryActions(index) }
+                }
+                card.addView(menu, LinearLayout.LayoutParams(dp(40), dp(60)))
+
+                list.addView(card, LinearLayout.LayoutParams(-1, dp(82)).apply {
+                    setMargins(0, 0, 0, dp(8))
+                })
                 shown++
-            }catch(_:Exception){}
+            } catch (_: Exception) {}
         }
-        if(shown==0) list.addView(TextView(this).apply{text=if(history.isEmpty())"No saved files yet." else "No saved files match your search.";textSize=16f;gravity=Gravity.CENTER;setTextColor(Color.GRAY);setPadding(0,dp(50),0,dp(50))},lp(-1,dp(120)))
+
+        if (shown == 0) {
+            list.addView(TextView(this).apply {
+                text = if(history.isEmpty()) "No saved files yet." else if(savedRecentOnly) "No recent saved files." else "No saved files match your search."
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setTextColor(Color.GRAY)
+                setPadding(0, dp(50), 0, dp(50))
+            }, lp(-1, dp(120)))
+        }
     }
 
     private fun showSortDialog(onSorted: () -> Unit) {
@@ -695,7 +798,8 @@ class MainActivity : Activity() {
 
     private fun showSettings() {
         selectedTab=2; refreshBottomNav()
-        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(247,248,250));setPadding(dp(14),dp(8),dp(14),dp(14))}
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.rgb(247,248,250));setPadding(dp(14),0,dp(14),dp(14))}
+        applyScreenInsets(root)
         val scroll=ScrollView(this); val content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}; scroll.addView(content); appHeader(content)
         content.addView(TextView(this).apply{text="⚙  Settings";textSize=21f;typeface=Typeface.DEFAULT_BOLD;setTextColor(Color.rgb(20,28,36));setPadding(dp(6),dp(4),0,dp(8))},lp(-1,dp(44)))
         val backup=settingCard("◆","Google Drive Backup & Restore","Backup your lists, restore, and manage\nGoogle Drive connection").apply{setOnClickListener{showBackupDialog()}}
@@ -814,8 +918,8 @@ class MainActivity : Activity() {
 
                 inputType =
                     android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
-                    android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                            android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
+                            android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
 
                 imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
 
@@ -877,7 +981,7 @@ class MainActivity : Activity() {
                 setOnEditorActionListener { _, actionId, event ->
                     val enterPressed =
                         event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-                        event.action == KeyEvent.ACTION_DOWN
+                                event.action == KeyEvent.ACTION_DOWN
 
                     if (
                         actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT ||
@@ -910,7 +1014,7 @@ class MainActivity : Activity() {
                 setOnEditorActionListener { _, actionId, event ->
                     val enterPressed =
                         event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-                        event.action == KeyEvent.ACTION_DOWN
+                                event.action == KeyEvent.ACTION_DOWN
 
                     if (
                         actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT ||
@@ -1178,15 +1282,56 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun loadPinnedHistory() {
+        pinnedHistory.clear()
+        pinnedHistory.addAll(prefs.getStringSet("pinned_history", emptySet()) ?: emptySet())
+    }
+
+    private fun savePinnedHistory() {
+        prefs.edit().putStringSet("pinned_history", HashSet(pinnedHistory)).apply()
+    }
+
     private fun showHistoryActions(index: Int) {
-        val options = arrayOf("Restore this list", "Delete this list")
+        if (index !in history.indices) return
+        val raw = history[index]
+        val isPinned = pinnedHistory.contains(raw)
+        val options = arrayOf(if (isPinned) "Unpin from top" else "Pin to top", "Delete", "Share")
         AlertDialog.Builder(this)
             .setTitle("Saved List")
             .setItems(options) { _, choice ->
-                if (choice == 0) restoreHistory(index) else confirmDeleteHistory(index)
+                when (choice) {
+                    0 -> {
+                        if (isPinned) pinnedHistory.remove(raw) else pinnedHistory.add(raw)
+                        savePinnedHistory()
+                        showSavedFiles()
+                    }
+                    1 -> confirmDeleteHistory(index)
+                    2 -> shareHistoryItem(index)
+                }
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun shareHistoryItem(index: Int) {
+        if (index !in history.indices) return
+        try {
+            val o = JSONObject(history[index])
+            rows.clear()
+            val a = o.optJSONArray("rows") ?: JSONArray()
+            for (i in 0 until a.length()) {
+                val r = a.getJSONObject(i)
+                rows.add(Row(r.optString("item", ""), r.optInt("qty", 1)))
+            }
+            if (::shop.isInitialized) shop.setText(o.optString("shop", "Digital Vision"))
+            if (::orderTo.isInitialized) orderTo.setText(o.optString("orderTo", ""))
+            if (::date.isInitialized) date.text = o.optString("date", SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()))
+            shareCurrentList(false, false)
+            loadSaved()
+            render()
+        } catch (_: Exception) {
+            Toast.makeText(this, "Could not share this list.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun confirmDeleteHistory(index: Int) {
@@ -1196,10 +1341,12 @@ class MainActivity : Activity() {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Delete") { _, _ ->
                 if (index in history.indices) {
-                    history.removeAt(index)
+                    val removed = history.removeAt(index)
+                    pinnedHistory.remove(removed)
+                    savePinnedHistory()
                     saveHistory()
                     Toast.makeText(this, "List deleted.", Toast.LENGTH_SHORT).show()
-                    showHistory()
+                    showSavedFiles()
                 }
             }.show()
     }
@@ -1392,8 +1539,8 @@ class MainActivity : Activity() {
                                 .setTitle("Update Check Failed")
                                 .setMessage(
                                     "$error\n\n" +
-                                    "Your current app is still working normally.\n" +
-                                    "Internet connection and update-server settings can be checked later."
+                                            "Your current app is still working normally.\n" +
+                                            "Internet connection and update-server settings can be checked later."
                                 )
                                 .setPositiveButton("OK", null)
                                 .show()
@@ -1541,7 +1688,7 @@ class MainActivity : Activity() {
                 .setTitle("Cannot Install Update")
                 .setMessage(
                     "Android could not open the downloaded update.\n\n" +
-                    "If prompted, allow this app to install updates from this source, then try again."
+                            "If prompted, allow this app to install updates from this source, then try again."
                 )
                 .setPositiveButton("OK", null)
                 .show()
@@ -1690,7 +1837,7 @@ class MainActivity : Activity() {
                     fileName
                 ) ?: throw Exception(
                     "Google Drive could not create the backup file. " +
-                    "Make sure the selected folder is still available and writable."
+                            "Make sure the selected folder is still available and writable."
                 )
 
                 runOnUiThread { message.text = "Uploading backup…" }
@@ -1737,7 +1884,7 @@ class MainActivity : Activity() {
                         .setTitle("Backup Failed")
                         .setMessage(
                             "$errorMessage\n\n" +
-                            "Your local data has not been deleted or changed."
+                                    "Your local data has not been deleted or changed."
                         )
                         .setPositiveButton("OK", null)
                         .setNeutralButton("Choose Folder") { _, _ ->
@@ -1782,9 +1929,11 @@ class MainActivity : Activity() {
 
     private fun lp(w:Int,h:Int,weight:Float=0f)=LinearLayout.LayoutParams(w,h).apply { this.weight=weight }
 
-    private fun shareCurrentList(preferWhatsApp: Boolean = false) {
+    private fun shareCurrentList(preferWhatsApp: Boolean = false, saveToGallery: Boolean = true) {
         // Always make sure the current editor contents are reflected in the JPG.
-        exportJpg()
+        // Saved Files > three-dot > Share uses an app-private temporary JPG,
+        // so sharing does not also save a copy to the Gallery.
+        exportJpg(saveToGallery)
 
         val uri = lastExportUri
         if (uri == null) {
@@ -2005,7 +2154,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun exportJpg(){
+    private fun exportJpg(saveToGallery: Boolean = true){
         // Sync the current editor values before exporting.
         for(i in 1 until container.childCount){
             val rowView = container.getChildAt(i) as? LinearLayout ?: continue
@@ -2122,9 +2271,9 @@ class MainActivity : Activity() {
         val footerHeight = 104f
         val totalHeight =
             tableTop +
-            headerHeight +
-            rowHeights.sum() +
-            footerHeight
+                    headerHeight +
+                    rowHeights.sum() +
+                    footerHeight
 
         val bmp = Bitmap.createBitmap(
             width,
@@ -2255,8 +2404,8 @@ class MainActivity : Activity() {
             val blockHeight = lines.size * itemLineHeight
             var baseline =
                 currentTop +
-                (rowHeight - blockHeight) / 2f -
-                bodyPaint.fontMetrics.ascent
+                        (rowHeight - blockHeight) / 2f -
+                        bodyPaint.fontMetrics.ascent
 
             lines.forEach { line ->
                 c.drawText(
@@ -2315,6 +2464,31 @@ class MainActivity : Activity() {
             }
             .replace("/", "-")
 
+        if (!saveToGallery) {
+            // Temporary app-private file: available for sharing but never added
+            // to the user's Gallery/Photos collection.
+            val tempFile = File(
+                getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                "DigitalVision_share_${System.currentTimeMillis()}.jpg"
+            )
+
+            try {
+                FileOutputStream(tempFile).use { out ->
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+                lastExportUri = FileProvider.getUriForFile(
+                    this,
+                    "${BuildConfig.APPLICATION_ID}.fileprovider",
+                    tempFile
+                )
+            } catch (_: Exception) {
+                lastExportUri = null
+            } finally {
+                bmp.recycle()
+            }
+            return
+        }
+
         val name = "DigitalVision_${safeDate}.jpg"
 
         val values = ContentValues().apply {
@@ -2354,6 +2528,7 @@ class MainActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+        bmp.recycle()
     }
 
 }
